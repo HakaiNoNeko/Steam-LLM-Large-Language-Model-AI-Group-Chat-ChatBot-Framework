@@ -10,7 +10,7 @@ That's pretty much it.
 
 All you need to do is download Ollama and a local model, make sure those work through Alpaca, give the bot what it needs in system prompt.txt and config.txt (I heavily recommend lightweight models on "fast mode" with no context window for longevity during operation, but if you have a big system prompt then consider balancing power and speed), then use either of the run commands. 
 
-I don't know if this is exclusively a me-problem, but I found that the run commands don't work out-of-the-box and putting ". start.sh" into Konsole on Kubuntu starts it.
+I don't know if this is exclusively a me-problem, but I found that the run commands don't work out-of-the-box, but putting ". start.sh" into Konsole on Kubuntu after right clicking and running start.sh in Konsole works.
 
 "Laborer [EXAMPLE].txt" is an example file of a system prompt, to demonstrate just how specific a system prompt can be and still work fine with a light model.
 
