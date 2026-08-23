@@ -1,0 +1,75 @@
+# ================================================================
+# OLLAMA STEAM CHATBOT FRAMEWORK - CONFIG.TXT
+# ================================================================
+# THIS is the main configuration file.
+# You normally only edit the text after each = sign.
+# Do NOT put quotes around values.
+#
+# Example:
+# Bot name = My Cool Bot
+# Memory = on
+#
+# Personality, the full system prompt, and masters are in: system prompt.txt
+# ================================================================
+
+[STEAM ACCOUNT]
+# Your Steam login. Leave Steam Guard code blank to type a fresh code when asked.
+Steam account name =
+Steam password =
+Steam Guard code =
+
+[BOT IDENTITY]
+Bot name = Steam Companion
+# Any name in this comma-separated list can activate /groupmode alias.
+Aliases = steam companion, companion
+
+[OLLAMA]
+Ollama URL = http://127.0.0.1:11434
+Reply model = llama3.2:latest
+Timing model = llama3.2:latest
+Fast reply model = llama3.2:latest
+Fast timing model = llama3.2:latest
+Memory model = llama3.2:latest
+Safety model = llama-guard3:1b
+
+[FEATURES]
+# Memory stores useful conversation facts and recent interactions.
+Memory = on
+# Friendships keep the -100 to 100 relationship system.
+# Friendship changes are decided from full-context AI analysis.
+Friendships = on
+# Lets the local model extract useful long-term memories in the background.
+Memory AI = on
+# Lets AI semantic analysis update friendship when Friendships is on.
+Friendship AI = on
+
+[REPLY MODES]
+# Group modes: off, alias, smart, all
+# off   = never automatically reply in a group
+# alias = only reply when Bot name or one of Aliases is used
+# smart = use the full social timing/conversation system to decide when to speak
+# all   = reply to each eligible live message when the bot is ready
+Default group mode = alias
+
+# DM modes: off, alias, all
+Default DM mode = all
+
+# auto = normal automatic replies; manual = log messages but do not auto-reply
+Startup mode = auto
+
+[REPLY STYLE / TIMING]
+Smart reply minimum confidence = 0.68
+Manual reply delays = off
+Reply delay per word ms = 0
+Max reply delay ms = 12000
+Reply cooldown ms = 2000
+Max reply characters = 750
+Max reply sentences = 3
+
+[PERFORMANCE]
+Fast mode = off
+Performance mode = on
+
+[CHAT COMMANDS]
+# Prefix used for simple Steam-side commands such as !help and !ask.
+Chat command prefix = !bot

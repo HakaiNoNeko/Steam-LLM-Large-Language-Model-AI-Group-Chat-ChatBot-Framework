@@ -1,0 +1,18 @@
+{
+  "name": "ollama-steam-chat-framework",
+  "version": "2.0.5",
+  "private": true,
+  "description": "Full-featured Steam/Ollama chatbot framework with generic shareable configuration.",
+  "main": "bot.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node bot.js",
+    "check": "node --check bot.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "steam-user": "latest"
+  }
+}
