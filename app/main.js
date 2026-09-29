@@ -5,6 +5,10 @@ const { spawn } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 
+// The GPU process crashes on some Wayland + NVIDIA setups (eglCreateImage fails), leaving a white window.
+// A form UI doesn't need GPU rasterization, so use software rendering on Linux.
+if (process.platform === "linux") app.commandLine.appendSwitch("disable-gpu");
+
 const BOT_SRC = app.isPackaged ? path.join(process.resourcesPath, "bot") : path.join(__dirname, "..");
 const DATA_DIR = path.join(app.getPath("userData"), "bot");
 const CONFIG_FILE = path.join(DATA_DIR, "config.txt");
