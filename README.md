@@ -14,6 +14,29 @@ Set up your own Steam chatbot that can autonomously talk to people in group chat
 
 That's pretty much it.
 
+## Desktop app (GUI)
+
+Prefer clicking over editing text files? There's a desktop app with a first-run setup wizard, a settings editor for `config.txt`, a system prompt editor, start/stop with a live console, and an Ollama helper that detects Ollama and pulls models. It runs the same `bot.js` underneath, so the script-based setup below still works.
+
+### Install
+
+Download the latest installer from the [Releases page](../../releases/latest):
+
+- **Windows:** run `SteamLLMChatbot-Setup-<version>.exe` and pick an install folder. The installer is unsigned, so SmartScreen will warn on first run: click **More info**, then **Run anyway**.
+- **Linux:** download `SteamLLMChatbot-<version>.AppImage`, run `chmod +x` on it, then run it. On distros that restrict unprivileged user namespaces (e.g. Ubuntu 24.04), launch it with `--no-sandbox` if it refuses to start.
+
+You still need [Ollama](https://ollama.com/download) (the app checks for it and links you there if it's missing) and a Steam account for the bot. You do **not** need to install Node.js for the desktop app.
+
+### First run
+
+1. The setup wizard walks you through Ollama and a model (it can pull one for you), the Steam account, the bot's name, and its personality.
+2. Hit **Start bot** on the Dashboard and watch the live console.
+3. Reopen the wizard any time with **Setup wizard**, or use the **Settings**, **System Prompt** and **Ollama** tabs.
+
+The app keeps its config, system prompt, logs and memory in your user data folder (use **Open data folder** on the Dashboard to find it), not the install folder.
+
+To run or build the app from source, see [app/README.md](app/README.md).
+
 ## Quick start
 
 1. Install Ollama and a local model, and make sure they work (for example through Alpaca).
