@@ -24,7 +24,7 @@ Prefer clicking over editing text files? There's a desktop app with a first-run 
 
 Download the latest installer from the [Releases page](../../releases/latest):
 
-- **Windows:** run `SteamLLMChatbot-Setup-<version>.exe` and pick an install folder. The installer is unsigned, so SmartScreen will warn on first run: click **More info**, then **Run anyway**.
+- **Windows:** run `SteamLLMChatbot-Setup-<version>.exe` and pick an install folder. The installer is unsigned, so SmartScreen will warn on first run: click **More info**, then **Run anyway**. *(**Note:** Windows exe remains untested. If anyone is willing to test the exe on Windows, feel free to do so, and edit README and replace this note with something like "Windows exe tested by \<user>".)*
 - **Linux:** download `SteamLLMChatbot-<version>.AppImage`, run `chmod +x` on it, then run it. On distros that restrict unprivileged user namespaces (e.g. Ubuntu 24.04), launch it with `--no-sandbox` if it refuses to start.
 
 You still need [Ollama](https://ollama.com/download) (the app checks for it and links you there if it's missing) and a Steam account for the bot. You do **not** need to install Node.js for the desktop app.
