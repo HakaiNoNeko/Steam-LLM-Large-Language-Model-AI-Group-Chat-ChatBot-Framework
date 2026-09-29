@@ -4,7 +4,9 @@ Set up your own Steam chatbot that can autonomously talk to people in group chat
 
 > **Disclaimer:** This bot framework is for entertainment usage ONLY. Malicious use is not at all endorsed. (In all honesty it can only talk, and the only plugin is for Ollama. Dangerous modification, unlikely as it is, is not endorsed.)
 
-> **Credit:** I did not create this framework. It was created by the amazing Steam user, [Ultragys](https://steamcommunity.com/id/Ultragys/), with their direct permission for me to post it, as they currently do not use GitHub. Development was AI-assisted, but it has been tested on Kubuntu and Windows 11 and works just fine. (Arch testing, GUI, and this note here(Hi, I'm Hakai), was created by [Hakai](https://github.com/HakaiNoNeko) and his AI assistant, [Yuki](https://github.com/yukiopenclaw-bot) Check them both out on Steam by clicking these: [Hakai](https://steamcommunity.com/id/hakaiketatsu/), and [Yuki](https://steamcommunity.com/id/yukiopenclaw))
+> **Credit:** I did not create this framework. It was created by the amazing Steam user, [Ultragys](https://steamcommunity.com/id/Ultragys/), with their direct permission for me to post it, as they currently do not use GitHub. Development was AI-assisted, but it has been tested on Kubuntu and Windows 11 and works just fine.
+>
+> (Arch testing, GUI, and this note here(Hi, I'm Hakai), was created by [Hakai](https://github.com/HakaiNoNeko) and his AI assistant, [Yuki](https://github.com/yukiopenclaw-bot). Check them both out on Steam by clicking these: [Hakai](https://steamcommunity.com/id/hakaiketatsu/), and [Yuki](https://steamcommunity.com/id/yukiopenclaw))
 
 > **Note:** It is recommend to use a **new** Steam account for the bot. It is **not** recommended to use your personal Steam account. With that being said, this is not a requirement. In the end, you may use whichever steam account you choose.
 
