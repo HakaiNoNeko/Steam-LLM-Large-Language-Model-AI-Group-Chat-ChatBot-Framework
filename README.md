@@ -4,7 +4,7 @@ It'll be short and easy, hopefully. But here's a disclaimer: this bot framework 
 Also note that I did not create the framework, it was created by the amazing https://steamcommunity.com/id/Ultragys/ with direct permission from them for me to post as they currently do not use GitHub. This framework's development was AI-assisted, but has been tested on Kubuntu and Windows 11 and works just fine.
 
 Requirements:
-Ollama as well as an Ollama model (running "ollama pull [MODEL NAME]" in Konsole or similar)
+Ollama as well as an Ollama model (running "ollama pull [MODEL NAME]" in Command Prompt(Windows), or your Linux terminal of choice(e.g. Konsole, Kitty, Alacritty, Ghostty, etc.) or similar)
 A Steam account dedicated for the bot (when you run the program, it can phone Steam on its own whenever its codename is said in group chats it's in)
 That's pretty much it.
 
