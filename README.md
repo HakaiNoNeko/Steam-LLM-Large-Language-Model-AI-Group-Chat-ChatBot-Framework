@@ -4,13 +4,15 @@ Set up your own Steam chatbot that can autonomously talk to people in group chat
 
 > **Disclaimer:** This bot framework is for entertainment usage ONLY. Malicious use is not at all endorsed. (In all honesty it can only talk, and the only plugin is for Ollama. Dangerous modification, unlikely as it is, is not endorsed.)
 
-> **Credit:** I did not create this framework. It was created by the amazing [Ultragys](https://steamcommunity.com/id/Ultragys/), with their direct permission for me to post it, as they currently do not use GitHub. Development was AI-assisted, but it has been tested on Kubuntu and Windows 11 and works just fine.
+> **Credit:** I did not create this framework. It was created by the amazing [Ultragys](https://steamcommunity.com/id/Ultragys/), with their direct permission for me to post it, as they currently do not use GitHub. Development was AI-assisted, but it has been tested on Kubuntu and Windows 11 and works just fine. (Arch testing, GUI, and this note here(Hi, I'm Hakai), was created by [Hakai](https://github.com/HakaiNoNeko) and his AI assistant, [Yuki](https://github.com/yukiopenclaw-bot))
+
+> **Note:** It is recommend to use a **new** Steam account for the bot. It is **not** recommended to use your personal Steam account. With that being said, this is not a requirement. In the end, you may use whichever steam account you choose.
 
 ## Requirements
 
-- **Ollama and at least one Ollama model.** Pull a model with `ollama pull [MODEL NAME]` in Command Prompt (Windows) or your Linux terminal of choice (Konsole, Kitty, Alacritty, Ghostty, etc.).
+- **Ollama and at least one Ollama model.** By default, it may install llama3.2:latest and llama-guard3:1b. To use a custom model, pull a model with `ollama pull [MODEL NAME]` in Command Prompt (Windows) or your Linux terminal of choice (Konsole, Kitty, Alacritty, Ghostty, etc.).
 - **[Node.js](https://nodejs.org) 18 or newer.**
-- **A Steam account dedicated to the bot.** Once running, the bot talks on its own whenever its codename is said in a group chat it's in.
+- **A Steam account dedicated to the bot.** Once running, the bot talks on its own whenever its codename is said in a group chat it's in. 
 
 That's pretty much it.
 
@@ -37,7 +39,7 @@ The app keeps its config, system prompt, logs and memory in your user data folde
 
 To run or build the app from source, see [app/README.md](app/README.md).
 
-## Quick start
+## Run from Terminal
 
 1. Install Ollama and a local model, and make sure they work (for example through Alpaca).
 2. Give the bot what it needs in `system prompt.txt` and `config.txt`.
@@ -120,6 +122,9 @@ Automatic friendship changes use full-context semantic analysis rather than keyw
 
 ### Starting
 
+For GUI, just open the app, go through setup if not already, and click Start Bot.
+
+For Terminal, follow the instructions for your system:
 On Windows, double-click `start.bat`. On Linux, run `bash start.sh` from the framework folder.
 
 If the Steam account information is missing or Steam rejects the login, the framework does not enter normal operation. It tells you what to fix in the `[STEAM ACCOUNT]` section of the `config.txt` in that exact framework folder and waits for a key before closing.
