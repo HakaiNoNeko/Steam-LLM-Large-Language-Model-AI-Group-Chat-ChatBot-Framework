@@ -25,10 +25,11 @@ test("group mentions use the roster; unknown names fall back to @Name; DMs are p
   assert.equal(r.plain, "hey @Bob and @Zed");
 });
 
-test("spoilers only render in groups", () => {
-  const r = parseActions("[spoiler:the butler did it]", ALL_ON);
-  assert.equal(r.bbcode(null, true), "[spoiler]the butler did it[/spoiler]");
-  assert.equal(r.bbcode(null, false), "the butler did it");
+test("spoilers become their own /spoiler action and leave the text", () => {
+  const r = parseActions("the answer is [spoiler:the butler did it]", ALL_ON);
+  assert.deepEqual(r.actions, [{ type: "spoiler", text: "the butler did it" }]);
+  assert.equal(r.plain, "the answer is");
+  assert.equal(r.bbcode(null, true), "the answer is");
 });
 
 test("model-written brackets can never become BBCode", () => {

@@ -3927,14 +3927,15 @@ async function performReplyV9(chosen, targetKey, answer, actionsOut) {
     }
   }
 
+  // "/me ..." and "/spoiler ..." only work as a whole message, so each goes out on its own.
   for (const action of actionsOut?.actions || []) {
-    if (action.type !== "me") continue;
-    const line = "/me " + trimReply(action.text);
+    if (action.type !== "me" && action.type !== "spoiler") continue;
+    const line = `/${action.type} ` + trimReply(action.text);
     try {
       if (chosen.kind === "group") await sendGroup(chosen.groupId, chosen.chatId, targetKey, line, { bbcode: true, plain: line });
       else await sendDm(chosen.steamID, targetKey, line);
     } catch (err) {
-      logConsole("[action] /me failed:", err.message);
+      logConsole(`[action] /${action.type} failed:`, err.message);
     }
   }
 }
@@ -4953,6 +4954,7 @@ function printHelp() {
   console.log("/mode auto|manual                  Turn automatic replies on/off globally");
   console.log("/groupmode off|alias|smart|all [target]  Set one group's reply behavior");
   console.log("/dmmode off|alias|all              Set DM reply behavior");
+  console.log("/fake <text with tags>              Send a reply containing action tags, to test them (see /react)");
   console.log("/react <emoticon>                   React to the last message received in the selected chat (test)");
   console.log("/memory status                     Show memory database status");
   console.log("/memory show <person>              Show one saved memory profile");
@@ -6835,6 +6837,19 @@ async function consoleLoop() {
 
         const answer = await askOllama(selectedTargetKey, prompt, arg);
         await sendToSelected(answer);
+        continue;
+      }
+
+      if (cmd === "fake") {
+        // Test helper: runs the given text, tags included, through the same path as a model reply to the last
+        // message in the selected chat. e.g. /fake hi [react:steamhappy] [spoiler:secret] [me:waves] [store:620]
+        const last = lastIncomingV9.get(selectedTargetKey);
+        if (!last || !arg) {
+          logConsole("[fake] usage: /fake <reply text with [react:..] [me:..] [spoiler:..] [mention:..] [store:..] tags>  (select a chat that has sent a message first)");
+          continue;
+        }
+        const parsed = parseActions(arg, ACTIONS_ENABLED_V9, { ownedEmoticons: steamActions.owned, emoticons: EMOTICONS_V9 });
+        await performReplyV9(last, selectedTargetKey, parsed.plain, parsed);
         continue;
       }
 
