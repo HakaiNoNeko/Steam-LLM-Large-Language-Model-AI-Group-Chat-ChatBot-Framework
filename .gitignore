@@ -9,3 +9,5 @@ steam-memory-db-v4.json.*
 *.bak*
 steam-data/
 steam-refresh-token.json
+# personal to-do notes (never committed)
+notes.md

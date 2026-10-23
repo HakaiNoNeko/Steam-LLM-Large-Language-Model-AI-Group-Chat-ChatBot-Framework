@@ -1066,6 +1066,7 @@ async function askOllama(targetKey, userText, extraInstruction = "", selectedMem
     extraInstruction ? "Extra guidance: " + extraInstruction : "",
     actionsPrompt(ACTIONS_ENABLED_V9, { ownedEmoticons: steamActions.ownedList, isGroup: selectedPayload?.kind === "group" }),
     vision.note,
+    selectedPayload?.senderName ? `The person speaking to you right now is "${selectedPayload.senderName}". Do not confuse them with anyone else you know.` : "",
     "Latest selected message: " + userText
   ].filter(Boolean).join("\n\n");
 
@@ -3866,6 +3867,7 @@ const ACTIONS_ENABLED_V9 = humanConfigBool("Steam actions", true)
 const TYPING_INDICATOR_V9 = humanConfigBool("Typing indicator", true);
 const steamActions = createSteamActions(client, (...parts) => logConsole(...parts));
 const rosterByTargetV9 = new Map(); // group targetKey -> Map(lowercase name -> {accountid, name})
+const lastIncomingV9 = new Map(); // targetKey -> last payload received (for the /react test command)
 
 function rosterFor(targetKey) {
   if (!rosterByTargetV9.has(targetKey)) rosterByTargetV9.set(targetKey, new Map());
@@ -4927,6 +4929,7 @@ function printHelp() {
   console.log("/mode auto|manual                  Turn automatic replies on/off globally");
   console.log("/groupmode off|alias|smart|all [target]  Set one group's reply behavior");
   console.log("/dmmode off|alias|all              Set DM reply behavior");
+  console.log("/react <emoticon>                   React to the last message received in the selected chat (test)");
   console.log("/memory status                     Show memory database status");
   console.log("/memory show <person>              Show one saved memory profile");
   console.log("/memory forget <person> | <id|all> Forget saved memories");
@@ -5540,6 +5543,7 @@ function receiveIncoming(payload) {
     and the current reply cannot be contaminated by later chat.
   */
   writeChatLog(targetKey, `USER ${senderKey || "unknown"}`, text);
+  lastIncomingV9.set(targetKey, payload);
 
   // Ephemeral room awareness for Smart Reply. This does not enter reply memory.
   recordSmartReplyRoomMessageV6(payload);
@@ -6701,6 +6705,24 @@ async function consoleLoop() {
 
         const answer = await askOllama(selectedTargetKey, prompt, arg);
         await sendToSelected(answer);
+        continue;
+      }
+
+      if (cmd === "react") {
+        const last = lastIncomingV9.get(selectedTargetKey);
+        if (!last) {
+          logConsole("[react] usage: /react <emoticon name>  (reacts to the last message received in the selected chat; select one with /select or /dm first)");
+          continue;
+        }
+        const target = last.kind === "group"
+          ? { kind: "group", groupId: last.groupId, chatId: last.chatId }
+          : { kind: "dm", steamID: last.steamID };
+        try {
+          await steamActions.react(target, last, arg);
+          logConsole(`[react] reacted :${arg}: to "${last.text}"`);
+        } catch (err) {
+          logConsole("[react] failed:", err.message);
+        }
         continue;
       }
 
