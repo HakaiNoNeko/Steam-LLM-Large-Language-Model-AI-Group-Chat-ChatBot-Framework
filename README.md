@@ -41,6 +41,24 @@ The app keeps its config, system prompt, logs and memory in your user data folde
 
 To run or build the app from source, see [app/README.md](app/README.md).
 
+### Desktop app features
+
+- **Several bots at once.** Use the bot picker in the header to add bots. Each has its own persona, settings, memory and Steam account, and runs in its own process, so you can run a few small-model bots side by side. Two bots cannot share one Steam account (the app refuses to start the second).
+- **Test chat.** Talk to the bot inside the app, as a DM or as a group chat, with image attachments. It runs the real reply pipeline (persona, thinking, vision, Steam actions) but never logs into Steam and never touches memory. From a terminal: `node bot.js --playground`.
+- **Persona writer.** On the Persona tab, describe a character and an installed model writes the system prompt and personality for you, or improves the current one. The result lands in the editor for you to review before saving. Masters are never touched.
+- **Themes.** Dark, Light, Steam, Catboy glow, Sakura and High contrast, from the dropdown in the header.
+
+## New in this fork
+
+- **Images.** The bot can see pictures people send in chat (Steam uploads, Giphy, Imgur, Discord links). If the reply model supports vision it gets the image directly; otherwise set `Vision model` in `config.txt` (for example `llama3.2-vision`) and that model describes the picture first.
+- **Thinking on/off.** `Thinking = off|on|low|medium|high` for models that can think. Models without that ability ignore it, and any stray `<think>` text is stripped from replies.
+- **Steam actions.** The model can write small tags that the bot turns into Steam features: `[react:steamhappy]` (message reaction), `[me:waves]` (`/me`), `[mention:Name]`, `[spoiler:text]`, `[store:APPID]`, and `:emoticons:` from the ones the account owns. Each can be switched off in the `[STEAM ACTIONS]` section. Reactions use steam-user internals because it has no public reaction API, so treat them as experimental. In DMs spoilers and mentions are plain text.
+- **@mentions** of the bot count as calling it in `alias` mode.
+- **Steam Guard once.** After the first successful login the bot saves a login token (`steam-refresh-token.json`, treat it like the password) and stops asking for codes.
+- **Sturdier.** Request timeouts, a reconnect watchdog, saving state on shutdown, log rotation, and a pile of bug fixes (the reply cooldown now works, `Fast mode` no longer resets itself, offline DMs are no longer answered on login, `!bot help` style prefixes work, and more).
+
+Run the tests with `npm test`.
+
 ## Run from Terminal
 
 1. Install Ollama and a local model, and make sure they work (for example through Alpaca).
