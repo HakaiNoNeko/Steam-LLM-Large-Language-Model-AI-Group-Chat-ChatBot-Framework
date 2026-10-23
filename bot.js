@@ -1000,7 +1000,7 @@ async function prepareVisionV9(payload) {
     ].slice(0, VISION_MAX_IMAGES);
     const count = loaded.length;
     if (!count) {
-      result.note = `(The speaker attached ${urls.length} image(s) that could not be loaded.)`;
+      result.note = `(The speaker attached ${urls.length + direct.length} image(s) that could not be loaded.)`;
     } else if ((await ollama.capabilities(getReplyModel())).has("vision")) {
       result.images = loaded.map(img => img.base64);
       result.note = `(The speaker attached ${count} image(s); they are shown to you with this message.)`;
@@ -1020,7 +1020,7 @@ async function prepareVisionV9(payload) {
     }
   } catch (err) {
     logConsole("[vision] failed:", err.message);
-    result.note = `(The speaker attached ${urls.length} image(s) that could not be processed.)`;
+    result.note = `(The speaker attached ${urls.length + direct.length} image(s) that could not be processed.)`;
   }
   payload.__visionV9 = result;
   return result;
