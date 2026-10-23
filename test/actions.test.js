@@ -51,7 +51,7 @@ test("store tag becomes a /store action with the game name", () => {
 
 test("actionsPrompt lists enabled actions and owned emoticons", () => {
   const p = actionsPrompt(ALL_ON, { ownedEmoticons: ["steamhappy"], isGroup: false });
-  assert.match(p, /\[react:NAME\]/);
+  assert.match(p, /\[react:steamhappy\]/);
   assert.match(p, /:steamhappy:/);
   assert.doesNotMatch(p, /\[mention:/);
   assert.equal(actionsPrompt(OFF, {}), "");
