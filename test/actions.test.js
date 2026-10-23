@@ -82,3 +82,12 @@ test("only one emoticon and one reaction survive; invented links and mid-sentenc
   assert.equal(parseActions("hi /me linkstore:app://99/nic see https://x.com/me ok", ALL_ON).plain, "hi see https://x.com/me ok");
   assert.equal(parseActions("/me waves", ALL_ON).plain, "/me waves"); // at the start it is a real command
 });
+
+test("mentions match names loosely", () => {
+  const roster = new Map();
+  rememberPerson(roster, "【HAKAI】", 7);
+  rememberPerson(roster, "[AI BOT] Kisaragi", 8);
+  assert.equal(parseActions("[mention:hakai]", ALL_ON).bbcode(roster, true), "[mention=7]@【HAKAI】[/mention]");
+  assert.equal(parseActions("[mention:Kisaragi]", ALL_ON).bbcode(roster, true), "[mention=8]@[AI BOT] Kisaragi[/mention]");
+  assert.equal(parseActions("[mention:Zed]", ALL_ON).bbcode(roster, true), "@Zed");
+});
