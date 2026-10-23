@@ -239,7 +239,15 @@ ipcMain.handle("bot:input", (_e, id, line) => { const p = procs.get(id); if (p) 
 /* ---------- test chat (bot.js --playground: the real reply pipeline, no Steam) ---------- */
 function stopChat(id) {
   const c = chats.get(id);
-  if (c) { chats.delete(id); c.proc.kill(); }
+  if (c) { chats.delete(id); clearTimeout(c.idle); c.proc.kill(); }
+}
+
+// A test-chat process holds its model in memory, so it is stopped after 10 idle minutes (restarts on the next message).
+function touchChat(id) {
+  const c = chats.get(id);
+  if (!c) return;
+  clearTimeout(c.idle);
+  c.idle = setTimeout(() => stopChat(id), 10 * 60 * 1000);
 }
 
 function startChat(id) {
@@ -276,7 +284,9 @@ function startChat(id) {
 
 ipcMain.handle("chat:send", (_e, id, req) => {
   botDir(id);
-  startChat(id).proc.stdin.write(JSON.stringify(req) + "\n");
+  const chat = startChat(id);
+  touchChat(id);
+  chat.proc.stdin.write(JSON.stringify(req) + "\n");
 });
 ipcMain.handle("chat:reset", (_e, id) => { const c = chats.get(id); if (c) c.proc.stdin.write(JSON.stringify({ reset: true }) + "\n"); });
 ipcMain.handle("chat:stop", (_e, id) => stopChat(id));
