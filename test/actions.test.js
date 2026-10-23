@@ -88,6 +88,18 @@ test("mentions match names loosely", () => {
   rememberPerson(roster, "【HAKAI】", 7);
   rememberPerson(roster, "[AI BOT] Kisaragi", 8);
   assert.equal(parseActions("[mention:hakai]", ALL_ON).bbcode(roster, true), "[mention=7]@【HAKAI】[/mention]");
-  assert.equal(parseActions("[mention:Kisaragi]", ALL_ON).bbcode(roster, true), "[mention=8]@[AI BOT] Kisaragi[/mention]");
+  assert.equal(parseActions("[mention:Kisaragi]", ALL_ON).bbcode(roster, true), "[mention=8]@\\[AI BOT] Kisaragi[/mention]");
   assert.equal(parseActions("[mention:Zed]", ALL_ON).bbcode(roster, true), "@Zed");
+});
+
+test("mentions show the real profile name (brackets escaped); storeLinkFor finds the first search hit", async () => {
+  const { storeLinkFor } = require("../lib/steam-actions");
+  const roster = new Map();
+  rememberPerson(roster, "Hakai", 7, 60, "【HAKAI】");
+  rememberPerson(roster, "Bot", 8, 60, "[AI BOT] Kisaragi");
+  assert.equal(parseActions("[mention:hakai]", ALL_ON).bbcode(roster, true), "[mention=7]@【HAKAI】[/mention]");
+  assert.equal(parseActions("[mention:bot]", ALL_ON).bbcode(roster, true), "[mention=8]@\\[AI BOT] Kisaragi[/mention]");
+  const fake = async () => ({ json: async () => ({ items: [{ id: 284160, name: "BeamNG.drive" }] }) });
+  assert.equal(await storeLinkFor("beamng", fake), "https://store.steampowered.com/app/284160");
+  assert.equal(await storeLinkFor("nothing", async () => { throw new Error("offline"); }), "");
 });

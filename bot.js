@@ -10,7 +10,7 @@ const { bbcodeToPlain, extractImageUrls, isMentioned } = require("./lib/steam-te
 const { fetchImages } = require("./lib/images");
 const { extractInvites } = require("./lib/steam-text");
 const { checkForUpdate } = require("./lib/update");
-const { parseActions, actionsPrompt, rememberPerson, createSteamActions, escapeBb } = require("./lib/steam-actions");
+const { storeLinkFor, parseActions, actionsPrompt, rememberPerson, createSteamActions, escapeBb } = require("./lib/steam-actions");
 
 const PROJECT_DIR = process.env.STEAM_BOT_DATA_DIR || __dirname;
 const CONFIG_TXT_FILE = path.join(PROJECT_DIR, "config.txt");
@@ -3885,6 +3885,20 @@ const ACTIONS_ENABLED_V9 = humanConfigBool("Steam actions", true)
 const EMOTICONS_V9 = humanConfigBool("Steam actions", true) && humanConfigBool("Emoticons", false);
 const TYPING_INDICATOR_V9 = humanConfigBool("Typing indicator", true);
 const steamActions = createSteamActions(client, (...parts) => logConsole(...parts));
+const rawNamesV9 = new Map(); // steamid64 -> real Steam profile name (unsanitised, for mentions)
+const personaRequestedV9 = new Set();
+function rawPersonaNameV9(id) {
+  return rawNamesV9.get(id) || safeString(client.users?.[id]?.player_name || client.users?.get?.(id)?.player_name || "");
+}
+async function fetchPersonaV9(id) {
+  if (personaRequestedV9.has(id)) return;
+  personaRequestedV9.add(id);
+  try {
+    const res = await client.getPersonas([id]);
+    const name = res?.personas?.[id]?.player_name;
+    if (name) rawNamesV9.set(id, String(name));
+  } catch {}
+}
 const rosterByTargetV9 = new Map(); // group targetKey -> Map(lowercase name -> {accountid, name})
 const recentImagesV9 = new Map(); // targetKey -> [{sender, urls, at}]: Steam sends a pasted image as its own message
 const lastIncomingV9 = new Map(); // targetKey -> last payload received (for the /react test command)
@@ -3927,10 +3941,14 @@ async function performReplyV9(chosen, targetKey, answer, actionsOut) {
     }
   }
 
-  // "/me ...", "/spoiler ..." and "/store ..." only work as a whole message, so each goes out on its own.
+  // "/me ..." and "/spoiler ..." only work as a whole message, so each goes out on its own (a store link too).
   for (const action of actionsOut?.actions || []) {
     if (!["me", "spoiler", "store"].includes(action.type)) continue;
-    const line = `/${action.type} ` + trimReply(action.text);
+    let line = `/${action.type} ` + trimReply(action.text);
+    if (action.type === "store") {
+      line = await storeLinkFor(action.text);
+      if (!line) { logConsole(`[action] no store page found for "${action.text}"`); continue; }
+    }
     try {
       if (chosen.kind === "group") await sendGroup(chosen.groupId, chosen.chatId, targetKey, line, { bbcode: true, plain: line });
       else await sendDm(chosen.steamID, targetKey, line);
@@ -5988,7 +6006,13 @@ function wireGroupChat() {
       }
 
       const targetKey = getGroupTargetKey(groupId, chatId);
-      rememberPerson(rosterFor(targetKey), senderName, sender?.accountid);
+      // Mentions must show the person's real profile name, which can differ from the name chat uses for them.
+      const rawName = rawPersonaNameV9(senderKey);
+      rememberPerson(rosterFor(targetKey), senderName, sender?.accountid, 60, rawName);
+      if (!rawName) fetchPersonaV9(senderKey).then(() => {
+        const n = rawNamesV9.get(senderKey);
+        if (n) rememberPerson(rosterFor(targetKey), senderName, sender?.accountid, 60, n);
+      });
 
       const groupName = normalizeText(
         message.chat_group_name ||
