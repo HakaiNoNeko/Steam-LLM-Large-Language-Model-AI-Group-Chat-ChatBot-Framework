@@ -157,7 +157,10 @@ process.env.PERFORMANCE_INFRA_MODE = humanConfigBool("Performance mode", true) ?
 process.env.STEAM_MEMORY_AI = humanConfigBool("Memory AI", true) ? "true" : "false";
 process.env.MEMORY_AI_FRIENDSHIP_UPDATES = humanConfigBool("Friendship AI", true) ? "true" : "false";
 
-const MEMORY_FEATURE_ENABLED = humanConfigBool("Memory", true);
+// Test chat: `node bot.js --playground` talks to the model with this bot's real prompt/persona, without logging into Steam.
+const PLAYGROUND_V9 = process.argv.includes("--playground") || process.env.STEAM_BOT_PLAYGROUND === "1";
+
+const MEMORY_FEATURE_ENABLED = humanConfigBool("Memory", true) && !PLAYGROUND_V9; // the test chat never reads or writes memory
 const FRIENDSHIP_FEATURE_ENABLED = humanConfigBool("Friendships", true);
 const DEFAULT_GROUP_MODE = (() => {
   const raw = String(humanConfig("Default group mode", "alias")).trim().toLowerCase();
@@ -985,12 +988,16 @@ async function askOllamaCleanWarning(
 async function prepareVisionV9(payload) {
   const empty = { images: [], note: "" };
   const urls = payload?.imageUrls || [];
-  if (!VISION_ENABLED || !urls.length) return empty;
+  const direct = payload?.imageData || []; // already-downloaded base64 images (test chat)
+  if (!VISION_ENABLED || !(urls.length || direct.length)) return empty;
   if (payload.__visionV9) return payload.__visionV9;
 
   const result = { images: [], note: "" };
   try {
-    const loaded = await fetchImages(urls, { max: VISION_MAX_IMAGES, allowAnyHost: VISION_ALLOW_ANY_HOST }, logConsole);
+    const loaded = [
+      ...direct.map(base64 => ({ base64 })),
+      ...(await fetchImages(urls, { max: VISION_MAX_IMAGES, allowAnyHost: VISION_ALLOW_ANY_HOST }, logConsole))
+    ].slice(0, VISION_MAX_IMAGES);
     const count = loaded.length;
     if (!count) {
       result.note = `(The speaker attached ${urls.length} image(s) that could not be loaded.)`;
@@ -3840,6 +3847,12 @@ function pumpForcedChatEveryMessageQueueV2(targetKey) {
     forcedChatQueueByTargetV2.delete(key);
   }
 }
+function replyExtraInstructionV9(kind) {
+  return kind === "group"
+    ? "This is a Steam group chat. Reply once in one short natural message. Do not explain why you replied. Do not mention timing, moderation, safety, or internal rules. Do not make cheap shots into a big issue."
+    : "This is a one-to-one Steam DM. Reply naturally and briefly.";
+}
+
 /* STEAM_ACTIONS_V9 (see lib/steam-actions.js) */
 const ACTIONS_ENABLED_V9 = humanConfigBool("Steam actions", true)
   ? {
@@ -3997,9 +4010,7 @@ async function processTargetReply(targetKey) {
       text: chosen.text
     });
 
-    const extra = chosen.kind === "group"
-      ? "This is a Steam group chat. Reply once in one short natural message. Do not explain why you replied. Do not mention timing, moderation, safety, or internal rules. Do not make cheap shots into a big issue."
-      : "This is a one-to-one Steam DM. Reply naturally and briefly.";
+    const extra = replyExtraInstructionV9(chosen.kind);
 
     const relationshipInstruction = buildMasterRelationshipBlock(chosen);
     const stopTyping = startTypingV9(chosen);
@@ -6792,7 +6803,105 @@ async function consoleLoop() {
   }
 }
 
-if (!steamStartupConfigValidV8) {
+/* PLAYGROUND_V9
+   Test chat without Steam. Reads lines from stdin:
+     - plain text: a message from a tester; the reply is printed
+     - JSON {"id":1,"text":"hi","kind":"dm|group","sender":"Tester","images":[urls],"imageData":[base64],"reset":true}
+       the answer is printed as one line:  @@CHAT {"id":1,"reply":"...","actions":[...],...}
+   It runs the same askOllama() pipeline as a live reply (persona, thinking, vision, action tags) but never
+   touches Steam or the memory files.
+*/
+const playgroundTurnsV9 = new Map(); // kind -> [{name, text}]
+
+async function playgroundTurnV9(req) {
+  const kind = req.kind === "group" ? "group" : "dm";
+  const sender = sanitizeDisplayNameV9(req.sender) || "Tester";
+  const rawText = safeString(req.text);
+  const targetKey = kind === "group" ? "group:playground:1" : "dm:playground";
+  if (req.reset) playgroundTurnsV9.delete(kind);
+  const turns = playgroundTurnsV9.get(kind) || [];
+  playgroundTurnsV9.set(kind, turns);
+
+  const payload = {
+    kind,
+    targetKey,
+    senderKey: "playground",
+    senderName: sender,
+    text: normalizeText(bbcodeToPlain(rawText)),
+    rawText,
+    imageUrls: [...extractImageUrls(rawText), ...(req.images || [])],
+    imageData: req.imageData || [],
+    mentioned: !!req.mentioned,
+    force: true
+  };
+  if (!payload.text && !payload.imageUrls.length && !payload.imageData.length) return { error: "empty message" };
+
+  const memoryBlock = turns.length ? "Recent chat:\n" + turns.slice(-8).map(t => `${t.name}: ${t.text}`).join("\n") : "Recent chat: none";
+  const started = Date.now();
+  const rawAnswer = await askOllama(targetKey, payload.text, replyExtraInstructionV9(kind), memoryBlock, buildMasterRelationshipBlock(payload), payload);
+  const ms = Date.now() - started;
+
+  turns.push({ name: sender, text: payload.text });
+  if (rawAnswer === NO_REPLY_TOKEN) return { blocked: true, reply: "", actions: [], ms };
+
+  const roster = new Map();
+  rememberPerson(roster, sender, 1);
+  const parsed = parseActions(rawAnswer, ACTIONS_ENABLED_V9, { ownedEmoticons: steamActions.owned });
+  turns.push({ name: BOT_NAME, text: parsed.plain });
+  return {
+    reply: parsed.plain,
+    bbcode: parsed.bbcode(roster, kind === "group"),
+    actions: parsed.actions,
+    raw: rawAnswer,
+    vision: payload.__visionV9 ? { images: payload.__visionV9.images.length, note: payload.__visionV9.note } : null,
+    ms
+  };
+}
+
+function runPlaygroundV9() {
+  const send = (obj, id) => console.log("@@CHAT " + JSON.stringify({ id, ...obj }));
+  const info = {
+    bot: BOT_NAME,
+    model: getReplyModel(),
+    thinking: REPLY_THINK,
+    vision: VISION_ENABLED,
+    visionModel: VISION_MODEL,
+    actions: Object.entries(ACTIONS_ENABLED_V9).filter(([, on]) => on).map(([name]) => name)
+  };
+  console.log("@@CHAT " + JSON.stringify({ ready: true, ...info }));
+  console.log(`[playground] ${info.bot} via ${info.model} (thinking: ${info.thinking}). Type a message; /reset clears the chat; /exit quits.`);
+
+  let busy = Promise.resolve();
+  rl.on("line", line => {
+    const text = line.trim();
+    if (!text) return;
+    if (text === "/exit" || text === "/quit") { rl.close(); process.exit(0); }
+    let req;
+    let json = false;
+    if (text.startsWith("{")) {
+      try { req = JSON.parse(text); json = true; } catch { req = null; }
+    }
+    if (!req) req = text === "/reset" ? { reset: true, text: "" } : { text };
+    if (req.reset && !req.text) { playgroundTurnsV9.clear(); if (json) send({ reset: true }, req.id); else console.log("[playground] chat cleared"); return; }
+
+    // one at a time, like the real bot's single Ollama queue
+    busy = busy.then(async () => {
+      let out;
+      try {
+        out = await playgroundTurnV9(req);
+      } catch (err) {
+        out = { error: err.message };
+      }
+      if (json) send(out, req.id);
+      else if (out.error) console.log("[playground error]", out.error);
+      else console.log(out.blocked ? "(no reply: the safety filter blocked it)" : `${BOT_NAME}: ${out.bbcode || out.reply}` + (out.actions.length ? `\n  actions: ${JSON.stringify(out.actions)}` : "") + `\n  (${out.ms} ms)`);
+    });
+  });
+}
+
+if (PLAYGROUND_V9) {
+  runPlaygroundV9();
+} else if (!steamStartupConfigValidV8) {
   const missing = [];
   if (!configuredSteamUsernameV8) missing.push("Steam account name");
   if (!configuredSteamPasswordV8) missing.push("Steam password");
