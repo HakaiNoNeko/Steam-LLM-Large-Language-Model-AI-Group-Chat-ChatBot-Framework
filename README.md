@@ -47,7 +47,7 @@ To run or build the app from source, see [app/README.md](app/README.md).
 - **Test chat.** Talk to the bot inside the app, as a DM or as a group chat, with image attachments. It runs the real reply pipeline (persona, thinking, vision, Steam actions) but never logs into Steam and never touches memory. From a terminal: `node bot.js --playground`.
 - **Persona writer.** On the Persona tab, describe a character and an installed model writes the system prompt and personality for you, or improves the current one. The result lands in the editor for you to review before saving. Masters are never touched.
 - **Background mode.** Closing the window keeps the bots running from the system tray (Quit from the tray stops them). Per bot you can start it automatically when the app opens, and the app can open at login (Windows, macOS and Linux). The app checks the project's GitHub releases and, when a newer one exists, shows a banner with **Download and install**. Nothing is installed until you click it: on Windows it downloads the installer and runs it, on Linux it saves the new AppImage next to the old one (kept for rollback) and restarts into it. Downloads are only accepted from the project's own release page and are checked against GitHub's checksum when one is provided. The bot (terminal) just logs a line when an update exists. Forks can set `Update source = owner/repo` in `config.txt`; releases are published by pushing a `v*` tag, which the `Build installers` workflow turns into a release.
-- **Themes.** Dark, Light, Steam, Catboy glow, Sakura and High contrast, from the dropdown in the header.
+- **Themes.** Dark, Light, Steam, Yuki's Theme, Sakura and High contrast, from the dropdown in the header.
 
 ## New in this fork
 

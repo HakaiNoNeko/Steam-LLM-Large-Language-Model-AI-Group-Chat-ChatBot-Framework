@@ -12,7 +12,7 @@ const OPTIONS = {
 const MODEL_KEYS = ["Reply model", "Timing model", "Fast reply model", "Fast timing model", "Memory model"];
 const MODEL_FIELDS = [...MODEL_KEYS, "Vision model", "Safety model"];
 const DEFAULT_OLLAMA = "http://127.0.0.1:11434";
-const THEMES = [["dark", "Dark"], ["light", "Light"], ["steam", "Steam"], ["catboy", "Catboy glow"], ["sakura", "Sakura"], ["contrast", "High contrast"]];
+const THEMES = [["dark", "Dark"], ["light", "Light"], ["steam", "Steam"], ["catboy", "Yuki's Theme"], ["sakura", "Sakura"], ["contrast", "High contrast"]];
 
 function el(tag, props = {}, ...children) {
   const node = Object.assign(document.createElement(tag), props);
