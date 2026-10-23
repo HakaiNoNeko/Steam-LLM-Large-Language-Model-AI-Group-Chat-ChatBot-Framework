@@ -66,3 +66,9 @@ test("garbled emoticons are repaired or removed; bare [name] becomes a reaction;
   assert.equal(r.plain, "sounds fun");
   assert.equal(parseActions("yay :steamhappy: ok", ALL_ON, { ownedEmoticons: owned, emoticons: false }).plain, "yay ok");
 });
+
+test("tags written with a leading slash or a closing tag still work", () => {
+  const r = parseActions("hello [/me:waves hello] [react:steamhappy][/react]", ALL_ON);
+  assert.equal(r.plain, "hello");
+  assert.deepEqual(r.actions, [{ type: "me", text: "waves hello" }, { type: "react", name: "steamhappy" }]);
+});
