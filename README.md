@@ -50,7 +50,7 @@ To run or build the app from source, see [app/README.md](app/README.md).
 
 ## New in this fork
 
-- **Images.** The bot can see pictures people send in chat (Steam uploads, Giphy, Imgur, Discord links). If the reply model supports vision it gets the image directly; otherwise set `Vision model` in `config.txt` (for example `llama3.2-vision`) and that model describes the picture first.
+- **Images.** The bot can see pictures people send in chat (Steam uploads, Giphy, Imgur, Discord links). If the reply model supports vision it gets the image directly; otherwise set `Vision model` in `config.txt` (for example `bonsai-2:9b`) and that model describes the picture first.
 - **Thinking on/off.** `Thinking = off|on|low|medium|high` for models that can think. Models without that ability ignore it, and any stray `<think>` text is stripped from replies.
 - **Steam actions.** The model can write small tags that the bot turns into Steam features: `[react:steamhappy]` (message reaction), `[me:waves]` (`/me`), `[mention:Name]`, `[spoiler:text]`, `[store:APPID]`, and `:emoticons:` from the ones the account owns. Each can be switched off in the `[STEAM ACTIONS]` section. Reactions use steam-user internals because it has no public reaction API, so treat them as experimental. In DMs spoilers and mentions are plain text.
 - **@mentions** of the bot count as calling it in `alias` mode.

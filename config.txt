@@ -36,7 +36,7 @@ Safety model = llama-guard3:1b
 Thinking = off
 # Vision lets the bot look at images people send. If the reply model can see images it is used directly.
 Vision = on
-# Otherwise this model (e.g. llama3.2-vision) describes the image first. Leave blank for none.
+# Otherwise this model (e.g. bonsai-2:9b or gemma4) describes the image first. Leave blank for none.
 Vision model =
 Max images per message = 3
 # Images are only downloaded from known Steam/Giphy/Imgur/Discord hosts unless this is on.
