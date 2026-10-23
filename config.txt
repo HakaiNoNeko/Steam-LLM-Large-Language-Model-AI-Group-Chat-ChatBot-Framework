@@ -41,6 +41,15 @@ Vision model =
 Max images per message = 3
 # Images are only downloaded from known Steam/Giphy/Imgur/Discord hosts unless this is on.
 Allow any image host = off
+# Memory: how long a model stays loaded in RAM/VRAM after its last use (5m, 30s, 0 = free it right away, -1 = never).
+# Lower it if your computer starts swapping.
+Keep model loaded = 5m
+# Unload the other models before a different one is used, so the reply, timing, memory and vision models never sit in memory together.
+Keep only one model loaded = on
+# Free this bot's models when it exits.
+Unload models on exit = on
+# Context window in tokens (blank = Ollama's default, which on some models is 32768+ and uses a lot of memory). 8192 is plenty for chat.
+Context size = 8192
 # Give up on a stuck model after this many seconds.
 Reply timeout seconds = 180
 Utility timeout seconds = 60

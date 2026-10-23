@@ -259,7 +259,11 @@ const VISION_ENABLED = humanConfigBool("Vision", true);
 const VISION_MODEL = String(humanConfig("Vision model", "")).trim();
 const VISION_MAX_IMAGES = Math.max(1, Number(humanConfig("Max images per message", 3)) || 3);
 const VISION_ALLOW_ANY_HOST = humanConfigBool("Allow any image host", false);
+const OLLAMA_NUM_CTX = Number(humanConfig("Context size", "")) || 0;
 const ollama = createOllama({
+  numCtx: OLLAMA_NUM_CTX,
+  keepAlive: String(humanConfig("Keep model loaded", "5m")).trim() || "5m",
+  onlyOne: humanConfigBool("Keep only one model loaded", true),
   url: OLLAMA_URL,
   log: (...parts) => logConsole(...parts),
   defaultTimeoutMs: OLLAMA_REPLY_TIMEOUT_MS
@@ -992,7 +996,7 @@ async function prepareVisionV9(payload) {
   const urls = payload?.imageUrls || [];
   const direct = payload?.imageData || []; // already-downloaded base64 images (test chat)
   if (!VISION_ENABLED || !(urls.length || direct.length)) return empty;
-  if (payload.__visionV9) return payload.__visionV9;
+  if (payload.__visionV9) return { images: [], note: payload.__visionV9.note };
 
   const result = { images: [], note: "" };
   try {
@@ -1024,7 +1028,8 @@ async function prepareVisionV9(payload) {
     logConsole("[vision] failed:", err.message);
     result.note = `(The speaker attached ${urls.length + direct.length} image(s) that could not be processed.)`;
   }
-  payload.__visionV9 = result;
+  // Keep only the note on the payload: payloads live on in per-chat state, and base64 images (MBs each) must not.
+  payload.__visionV9 = { images: result.images.length ? new Array(result.images.length).fill("") : [], note: result.note };
   return result;
 }
 
@@ -7058,6 +7063,7 @@ async function shutdownV9(reason, exitCode = 0) {
     try { save(); } catch (err) { logConsole("[shutdown] save failed:", err.message); }
   }
   try { client.logOff(); } catch {}
+  if (humanConfigBool("Unload models on exit", true)) await Promise.race([ollama.unloadAll(), new Promise(resolve => setTimeout(resolve, 4000))]);
   await Promise.race([__fastFileWriteQueue, new Promise(resolve => setTimeout(resolve, 3000))]);
   process.exit(exitCode);
 }

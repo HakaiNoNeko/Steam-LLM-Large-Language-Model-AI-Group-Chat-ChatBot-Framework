@@ -62,7 +62,7 @@ test("generate only sends think/images to models that support them", async () =>
         const caps = json.model === "smart" ? ["completion", "thinking", "vision"] : ["completion"];
         return res.end(JSON.stringify({ capabilities: caps }));
       }
-      seen.push(json);
+      if (json.prompt) seen.push(json); // ignore unload requests (empty prompt)
       res.end(JSON.stringify({ response: "<think>x</think>ok" }));
     });
   });
@@ -77,6 +77,7 @@ test("generate only sends think/images to models that support them", async () =>
   assert.equal(seen[1].think, false);
   assert.deepEqual(seen[1].images, ["AA"]);
 
+  server.closeAllConnections();
   server.close();
 });
 
@@ -87,4 +88,37 @@ test("extractInvites and isNewer", () => {
   assert.equal(isNewer("v2.1.0", "2.0.5"), true);
   assert.equal(isNewer("2.0.5", "2.0.5"), false);
   assert.equal(isNewer("2.0.10", "2.0.9"), true);
+});
+
+test("only one model stays loaded, keep_alive is always sent, unloadAll frees everything", async () => {
+  const calls = [];
+  const server = http.createServer((req, res) => {
+    let body = "";
+    req.on("data", c => (body += c));
+    req.on("end", () => {
+      const json = JSON.parse(body || "{}");
+      res.setHeader("content-type", "application/json");
+      if (req.url === "/api/show") return res.end(JSON.stringify({ capabilities: ["completion"] }));
+      calls.push({ model: json.model, keep_alive: json.keep_alive, num_ctx: json.options?.num_ctx, prompt: json.prompt });
+      res.end(JSON.stringify({ response: "ok" }));
+    });
+  });
+  await new Promise(r => server.listen(0, "127.0.0.1", r));
+  const ollama = createOllama({ url: `http://127.0.0.1:${server.address().port}`, keepAlive: "2m", numCtx: 4096 });
+
+  await ollama.generate({ model: "a", prompt: "x" });
+  await ollama.generate({ model: "a", prompt: "x" });
+  assert.deepEqual(calls.map(c => c.model), ["a", "a"]); // same model: no unload
+  assert.equal(calls[0].keep_alive, "2m");
+  assert.equal(calls[0].num_ctx, 4096);
+
+  await ollama.generate({ model: "b", prompt: "x" });
+  assert.deepEqual(calls.slice(2).map(c => [c.model, c.keep_alive]), [["a", 0], ["b", "2m"]]); // a unloaded first
+  assert.deepEqual(ollama.loadedModels(), ["b"]);
+
+  await ollama.unloadAll();
+  assert.equal(calls.at(-1).keep_alive, 0);
+  assert.deepEqual(ollama.loadedModels(), []);
+  server.closeAllConnections();
+  server.close();
 });
