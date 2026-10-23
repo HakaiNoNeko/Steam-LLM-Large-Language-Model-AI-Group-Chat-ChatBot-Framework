@@ -43,9 +43,10 @@ test("disabled actions vanish but inline ones keep their text", () => {
   assert.deepEqual(r.actions, []);
 });
 
-test("store tag builds a store link; garbage ids are dropped", () => {
-  assert.equal(parseActions("[store:620]", ALL_ON).plain, "https://store.steampowered.com/app/620");
-  assert.equal(parseActions("x [store:abc]", ALL_ON).plain, "x");
+test("store tag becomes a /store action with the game name", () => {
+  const r = parseActions("sure [store:BeamNG.drive]", ALL_ON);
+  assert.deepEqual(r.actions, [{ type: "store", text: "BeamNG.drive" }]);
+  assert.equal(r.plain, "sure");
 });
 
 test("actionsPrompt lists enabled actions and owned emoticons", () => {

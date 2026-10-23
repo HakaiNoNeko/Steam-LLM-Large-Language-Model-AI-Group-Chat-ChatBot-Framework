@@ -3927,9 +3927,9 @@ async function performReplyV9(chosen, targetKey, answer, actionsOut) {
     }
   }
 
-  // "/me ..." and "/spoiler ..." only work as a whole message, so each goes out on its own.
+  // "/me ...", "/spoiler ..." and "/store ..." only work as a whole message, so each goes out on its own.
   for (const action of actionsOut?.actions || []) {
-    if (action.type !== "me" && action.type !== "spoiler") continue;
+    if (!["me", "spoiler", "store"].includes(action.type)) continue;
     const line = `/${action.type} ` + trimReply(action.text);
     try {
       if (chosen.kind === "group") await sendGroup(chosen.groupId, chosen.chatId, targetKey, line, { bbcode: true, plain: line });
