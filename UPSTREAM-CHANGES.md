@@ -151,11 +151,12 @@ Reactions use protected `steam-user` internals because the library does not prov
   - Improve an existing persona.
   - Write only the system-prompt and personality sections.
   - Never edit the masters section.
-- Added six themes:
+- Added seven themes:
   - Dark
   - Light
   - Steam
   - Yuki's Theme
+  - Fergus Dynamics
   - Sakura
   - High contrast
 - Added system-tray/background mode.
