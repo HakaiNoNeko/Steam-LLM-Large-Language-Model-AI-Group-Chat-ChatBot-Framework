@@ -72,3 +72,11 @@ test("tags written with a leading slash or a closing tag still work", () => {
   assert.equal(r.plain, "hello");
   assert.deepEqual(r.actions, [{ type: "me", text: "waves hello" }, { type: "react", name: "steamhappy" }]);
 });
+
+test("only one emoticon and one reaction survive; invented links and mid-sentence slash commands are dropped", () => {
+  const owned = new Set(["steamhappy", "steammocking"]);
+  assert.equal(parseActions("a :steammocking: b :steamhappy: c :steammocking:", ALL_ON, { ownedEmoticons: owned }).plain, "a :steammocking: b c");
+  assert.equal(parseActions("[react:steamhappy] [react:steammocking]", ALL_ON, { ownedEmoticons: owned }).actions.length, 1);
+  assert.equal(parseActions("hi /me linkstore:app://99/nic see https://x.com/me ok", ALL_ON).plain, "hi see https://x.com/me ok");
+  assert.equal(parseActions("/me waves", ALL_ON).plain, "/me waves"); // at the start it is a real command
+});

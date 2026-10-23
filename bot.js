@@ -3882,7 +3882,7 @@ const ACTIONS_ENABLED_V9 = humanConfigBool("Steam actions", true)
       store: humanConfigBool("Store links", true)
     }
   : { react: false, me: false, mention: false, spoiler: false, store: false };
-const EMOTICONS_V9 = humanConfigBool("Steam actions", true) && humanConfigBool("Emoticons", true);
+const EMOTICONS_V9 = humanConfigBool("Steam actions", true) && humanConfigBool("Emoticons", false);
 const TYPING_INDICATOR_V9 = humanConfigBool("Typing indicator", true);
 const steamActions = createSteamActions(client, (...parts) => logConsole(...parts));
 const rosterByTargetV9 = new Map(); // group targetKey -> Map(lowercase name -> {accountid, name})
