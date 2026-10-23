@@ -446,9 +446,9 @@ function isProbablyStaleIncoming(payload) {
   const maxAgeMs = Number(process.env.MAX_STEAM_EVENT_AGE_MS || 20000);
   const startupGraceMs = Number(process.env.STARTUP_BACKLOG_GRACE_MS || 8000);
 
-  if (!globalThis.__steamBotStartedAtMs) {
-    globalThis.__steamBotStartedAtMs = now;
-  }
+  // The startup window begins when Steam accepts the login (set in the loggedOn handler). Before that
+  // nothing can arrive; setting it lazily here used to make the first message after a restart look stale.
+  if (!globalThis.__steamBotStartedAtMs) return false;
 
   if (ageMs > maxAgeMs) {
     return true;
@@ -5761,6 +5761,7 @@ client.on("steamGuard", (domain, callback) => {
 });
 
 client.on("loggedOn", () => {
+  globalThis.__steamBotStartedAtMs = Date.now();
   steamLoginAcceptedV8 = true;
   logConsole("[SteamBot] Steam accepted the account. Starting framework.");
   client.setPersona(SteamUser.EPersonaState.Online);
