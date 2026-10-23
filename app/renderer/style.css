@@ -68,3 +68,8 @@ details summary { cursor: pointer; color: var(--muted); }
 .chip { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: var(--line); color: var(--muted); }
 .thumb { position: relative; }
 .thumb img { height: 44px; border-radius: 6px; border: 1px solid var(--line); }
+
+.banner { display: flex; align-items: center; gap: 10px; padding: 8px 18px; background: color-mix(in srgb, var(--accent) 18%, var(--panel)); border-bottom: 1px solid var(--line); }
+.banner[hidden] { display: none; }
+.banner span { flex: 1; }
+.opts { flex-wrap: wrap; gap: 16px; }

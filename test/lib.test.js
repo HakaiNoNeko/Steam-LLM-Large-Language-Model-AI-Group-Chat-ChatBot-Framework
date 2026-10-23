@@ -79,3 +79,12 @@ test("generate only sends think/images to models that support them", async () =>
 
   server.close();
 });
+
+test("extractInvites and isNewer", () => {
+  const { extractInvites } = require("../lib/steam-text");
+  const { isNewer } = require("../lib/update");
+  assert.deepEqual(extractInvites('[invite chatgroupid="47270190" chatgroupname="Multilandia"][/invite]'), [{ chatGroupId: "47270190", groupName: "Multilandia" }]);
+  assert.equal(isNewer("v2.1.0", "2.0.5"), true);
+  assert.equal(isNewer("2.0.5", "2.0.5"), false);
+  assert.equal(isNewer("2.0.10", "2.0.9"), true);
+});

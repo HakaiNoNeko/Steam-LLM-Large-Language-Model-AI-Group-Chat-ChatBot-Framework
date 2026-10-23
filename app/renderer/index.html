@@ -25,6 +25,12 @@
     <select id="themeSelect" title="Theme"></select>
   </header>
 
+  <div id="updateBanner" class="banner" hidden>
+    <span id="updateText"></span>
+    <button id="updateOpen" class="primary">View release</button>
+    <button id="updateDismiss">Later</button>
+  </div>
+
   <main>
     <section id="dashboard" class="tab active">
       <div class="row">
@@ -35,6 +41,11 @@
         <span class="spacer"></span>
         <button id="wizardBtn">Setup wizard</button>
         <button id="folderBtn">Open data folder</button>
+      </div>
+      <div class="row opts">
+        <label class="inline"><input type="checkbox" id="optAutostart"> Start this bot when the app opens</label>
+        <label class="inline"><input type="checkbox" id="optTray"> Keep running in the tray when the window is closed</label>
+        <label class="inline"><input type="checkbox" id="optLogin"> Open the app when I log in</label>
       </div>
       <pre id="log"></pre>
       <form id="inputForm" class="row">

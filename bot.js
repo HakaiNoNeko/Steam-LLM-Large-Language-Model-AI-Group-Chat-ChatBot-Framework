@@ -8,6 +8,8 @@ const path = require("path");
 const { createOllama, parseThinkSetting } = require("./lib/ollama");
 const { bbcodeToPlain, extractImageUrls, isMentioned } = require("./lib/steam-text");
 const { fetchImages } = require("./lib/images");
+const { extractInvites } = require("./lib/steam-text");
+const { checkForUpdate } = require("./lib/update");
 const { parseActions, actionsPrompt, rememberPerson, createSteamActions, escapeBb } = require("./lib/steam-actions");
 
 const PROJECT_DIR = process.env.STEAM_BOT_DATA_DIR || __dirname;
@@ -4871,6 +4873,10 @@ function handleSlashUtilityCommand(payload) {
     return handleInboxChatCommand(payload);
   }
 
+  if (/^\/friend(?:\s|$)/i.test(text)) {
+    return handleFriendChatCommand(payload);
+  }
+
   if (/^\/joinchat(?:\s|$)/i.test(text)) {
     return handleJoinChatChatCommand(payload);
   }
@@ -5726,6 +5732,10 @@ function startFrameworkAfterSteamLoginV8() {
 
   wireGroupChat();
 
+  scanPendingFriendRequestsV9();
+  if (humanConfigBool("Check for updates", true)) {
+    checkForUpdate(BOT_VERSION_V9).then(u => { if (u.available) logConsole(`[update] version ${u.latest} is available: ${u.url}`); }).catch(() => {});
+  }
   steamActions.loadEmoticons().catch(() => {});
   steamActions.onReaction(r => {
     if (r.isAdd) logConsole("[reaction]", `${r.reactor} reacted :${r.name}: in ${r.kind === "group" ? `group ${r.groupId}/${r.chatId}` : `DM ${r.friend}`}`);
@@ -5778,6 +5788,93 @@ client.on("error", err => {
   logConsole("[SteamBot] Error:", err.stack || err.message);
 });
 
+/* AUTO_JOIN_AND_FRIEND_REQUESTS_V9
+   Auto join groups = off | masters | all     (off: invites only go to the /inbox list, as before)
+   Friend requests  = ask | ignore            (ask: masters get a DM and decide; requests are NEVER accepted automatically)
+*/
+const BOT_VERSION_V9 = (() => { try { return require("./package.json").version; } catch { return "0.0.0"; } })();
+const AUTO_JOIN_V9 = (() => {
+  const v = String(humanConfig("Auto join groups", "off")).trim().toLowerCase();
+  return ["masters", "all"].includes(v) ? v : "off";
+})();
+const FRIEND_REQUESTS_V9 = String(humanConfig("Friend requests", "ask")).trim().toLowerCase() === "ignore" ? "ignore" : "ask";
+
+async function handleDmInvitesV9(invites, senderKey) {
+  for (const inv of invites) {
+    const invite = { chatGroupId: inv.chatGroupId, groupName: inv.groupName || "Unknown Steam chat", source: "direct_invite" };
+    addJoinChatInvite(invite);
+    const fromMaster = isJoinChatOwnerSteamID(senderKey);
+    if (AUTO_JOIN_V9 === "all" || (AUTO_JOIN_V9 === "masters" && fromMaster)) {
+      try {
+        await joinSteamChatFromInvite(invite);
+        logConsole(`[join] auto-joined "${invite.groupName}" (${invite.chatGroupId})`);
+      } catch (err) {
+        logConsole(`[join] could not join "${invite.groupName}":`, err.message);
+      }
+    } else {
+      logConsole(`[join] saved invite to "${invite.groupName}". Auto join is "${AUTO_JOIN_V9}", so it waits in /inbox.`);
+    }
+  }
+}
+
+const pendingFriendRequestsV9 = new Map(); // steamid64 -> { name, at }
+
+async function notifyMastersV9(text) {
+  for (const id of OWNER_STEAM_IDS) {
+    try { await client.chat.sendFriendMessage(id, text); } catch (err) { logConsole("[friend] could not message master " + id + ":", err.message); }
+  }
+}
+
+async function onFriendRequestV9(steamID) {
+  const id = typeof steamID === "string" ? steamID : steamID.getSteamID64();
+  if (pendingFriendRequestsV9.has(id)) return;
+  let name = id;
+  try {
+    const personas = await client.getPersonas([id]);
+    name = sanitizeDisplayNameV9(personas?.personas?.[id]?.player_name) || id;
+  } catch {}
+  pendingFriendRequestsV9.set(id, { name, at: nowIso() });
+  logConsole(`[friend] request from ${name} (${id}); waiting for a master to decide`);
+  if (!OWNER_STEAM_IDS.length) return logConsole("[friend] no masters configured, so the request just stays pending.");
+  await notifyMastersV9(`${name} (${id}) sent me a friend request. Reply "/friend accept ${id}" or "/friend deny ${id}". "/friend list" shows all pending.`);
+}
+
+function scanPendingFriendRequestsV9() {
+  if (FRIEND_REQUESTS_V9 === "ignore") return;
+  for (const [id, rel] of Object.entries(client.myFriends || {})) {
+    if (rel === SteamUser.EFriendRelationship.RequestRecipient) onFriendRequestV9(id).catch(() => {});
+  }
+}
+
+client.on("friendRelationship", (steamID, relationship) => {
+  if (FRIEND_REQUESTS_V9 === "ignore") return;
+  if (relationship === SteamUser.EFriendRelationship.RequestRecipient) onFriendRequestV9(steamID).catch(err => logConsole("[friend] request handling failed:", err.message));
+  else pendingFriendRequestsV9.delete(steamID.getSteamID64());
+});
+client.on("friendsList", () => scanPendingFriendRequestsV9());
+
+// Master-only chat command: /friend list | accept <id|number> | deny <id|number>
+async function handleFriendChatCommand(payload) {
+  if (!isJoinChatOwnerSteamID(payload.senderKey)) return true; // silent for non-masters
+  const [, action = "list", rawArg = ""] = normalizeText(payload.text).match(/^\/friend(?:\s+(\w+))?(?:\s+(.+))?$/i) || [];
+  const entries = Array.from(pendingFriendRequestsV9.entries());
+  const reply = msg => (payload.kind === "group"
+    ? sendGroup(payload.groupId, payload.chatId, payload.targetKey, msg)
+    : sendDm(payload.steamID, payload.targetKey, msg));
+
+  if (action.toLowerCase() === "list") {
+    return reply(entries.length ? "Pending friend requests:\n" + entries.map(([id, v], i) => `${i + 1}. ${v.name} (${id})`).join("\n") : "No pending friend requests.");
+  }
+  const id = /^\d{17}$/.test(rawArg.trim()) ? rawArg.trim() : entries[Number(rawArg) - 1]?.[0];
+  if (!id || !pendingFriendRequestsV9.has(id)) return reply("I don't have a pending request for that. Try /friend list.");
+  const name = pendingFriendRequestsV9.get(id).name;
+  if (action.toLowerCase() === "accept") client.addFriend(id);
+  else if (action.toLowerCase() === "deny") client.removeFriend(id);
+  else return reply("Usage: /friend list | accept <id or number> | deny <id or number>");
+  pendingFriendRequestsV9.delete(id);
+  return reply(`${action.toLowerCase() === "accept" ? "Accepted" : "Denied"} ${name}.`);
+}
+
 // Direct messages. Uses the modern chat event so we get the real server timestamp + ordinal
 // (needed to drop DMs that piled up while the bot was offline, and to react to a specific message).
 function handleFriendMessageV9(message) {
@@ -5786,6 +5883,10 @@ function handleFriendMessageV9(message) {
   const senderKey = steamID?.getSteamID64 ? steamID.getSteamID64() : safeString(steamID);
   const rawText = safeString(message.message);
   const text = normalizeText(bbcodeToPlain(rawText));
+
+  // A group invite sent in a DM. Always saved to the inbox; joined right away if auto-join allows it.
+  const invites = extractInvites(rawText);
+  if (invites.length) handleDmInvitesV9(invites, senderKey).catch(err => logConsole("[join] invite handling failed:", err.message));
 
   if (!text) return;
 
@@ -5903,6 +6004,8 @@ function wireGroupChat() {
       }
 
       const invites = addJoinChatInvite(invite);
+      // The inviter is not part of this event, so only "all" can act on it ("masters" works on DM invites).
+      if (AUTO_JOIN_V9 === "all") joinSteamChatFromInvite(invite).then(() => logConsole(`[join] auto-joined "${invite.groupName}"`)).catch(err => logConsole("[join] could not join:", err.message));
       logConsole("[inbox] saved direct Steam group chat invite:", invite);
       logConsole("[inbox] pending invite count:", invites.length);
     } catch (err) {

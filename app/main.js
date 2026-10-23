@@ -1,6 +1,7 @@
 "use strict";
 
-const { app, BrowserWindow, ipcMain, shell } = require("electron");
+const { app, BrowserWindow, ipcMain, shell, Tray, Menu, nativeImage } = require("electron");
+const os = require("os");
 const { spawn } = require("child_process");
 const fs = require("fs");
 const path = require("path");
@@ -19,6 +20,8 @@ const REGISTRY_FILE = path.join(USER_DIR, "bots.json");
 const UI_FILE = path.join(USER_DIR, "ui.json");
 
 let win = null;
+let tray = null;
+let quitting = false;
 const procs = new Map(); // bot id -> running bot.js
 const chats = new Map(); // bot id -> test-chat process (bot.js --playground)
 
@@ -153,21 +156,49 @@ ipcMain.handle("prompt:get", (_e, id) => { const dir = botDir(id); ensureData(di
 ipcMain.handle("prompt:set", (_e, id, text) => { fs.writeFileSync(path.join(botDir(id), "system prompt.txt"), String(text)); stopChat(id); });
 ipcMain.handle("data:open", (_e, id) => shell.openPath(botDir(id)));
 ipcMain.handle("link:open", (_e, url) => {
-  if (/^https:\/\/(ollama\.com|nodejs\.org)\//.test(url)) shell.openExternal(url);
+  if (/^https:\/\/(ollama\.com|nodejs\.org|github\.com\/HakaiNoNeko\/)/.test(url)) shell.openExternal(url);
 });
 
-/* ---------- UI preferences (theme) ---------- */
-ipcMain.handle("ui:get", () => { try { return JSON.parse(fs.readFileSync(UI_FILE, "utf8")); } catch { return {}; } });
+/* ---------- UI preferences (theme, background behaviour) ---------- */
+const readUi = () => { try { return JSON.parse(fs.readFileSync(UI_FILE, "utf8")); } catch { return {}; } };
+ipcMain.handle("ui:get", () => ({ closeToTray: true, ...readUi() }));
 ipcMain.handle("ui:set", (_e, patch) => {
-  let cur = {};
-  try { cur = JSON.parse(fs.readFileSync(UI_FILE, "utf8")); } catch {}
-  fs.writeFileSync(UI_FILE, JSON.stringify({ ...cur, ...patch }));
+  fs.writeFileSync(UI_FILE, JSON.stringify({ ...readUi(), ...patch }));
+  if ("launchAtLogin" in patch) setLaunchAtLogin(!!patch.launchAtLogin);
+});
+
+// Windows/macOS use Electron's login items; Linux uses an XDG autostart entry.
+function setLaunchAtLogin(on) {
+  if (process.platform === "linux") {
+    const file = path.join(os.homedir(), ".config", "autostart", "steam-llm-chatbot.desktop");
+    if (!on) return fs.rmSync(file, { force: true });
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    const exe = process.env.APPIMAGE || process.execPath;
+    fs.writeFileSync(file, `[Desktop Entry]\nType=Application\nName=Steam LLM Chatbot\nExec="${exe}" --hidden${app.isPackaged ? "" : " " + app.getAppPath()}\nX-GNOME-Autostart-enabled=true\n`);
+  } else {
+    app.setLoginItemSettings({ openAtLogin: on, args: ["--hidden"] });
+  }
+}
+
+ipcMain.handle("bots:autostart", (_e, id, on) => {
+  const reg = loadRegistry();
+  const bot = reg.bots.find((b) => b.id === id);
+  if (bot) { bot.autostart = !!on; saveRegistry(reg); }
+});
+
+/* ---------- update check (notify only) ---------- */
+ipcMain.handle("update:check", async () => {
+  try {
+    return { ok: true, current: app.getVersion(), ...(await lib("update").checkForUpdate(app.getVersion())) };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
 });
 
 /* ---------- running bots ---------- */
 function stopBot(id) { const p = procs.get(id); if (p) p.kill(); }
 
-ipcMain.handle("bot:start", (_e, id) => {
+function startBot(id) {
   if (procs.has(id)) return { ok: false, error: "Already running." };
   const dir = botDir(id);
   ensureData(dir);
@@ -200,7 +231,8 @@ ipcMain.handle("bot:start", (_e, id) => {
   bot.on("error", (err) => { send("bot:log", { id, text: `[GUI] Could not start bot: ${err.message}\n` }); procs.delete(id); send("bot:exit", { id, code: -1 }); });
   bot.on("exit", (code) => { if (procs.get(id) === bot) procs.delete(id); send("bot:exit", { id, code }); });
   return { ok: true };
-});
+}
+ipcMain.handle("bot:start", (_e, id) => startBot(id));
 ipcMain.handle("bot:stop", (_e, id) => stopBot(id));
 ipcMain.handle("bot:input", (_e, id, line) => { const p = procs.get(id); if (p) p.stdin.write(String(line) + "\n"); });
 
@@ -313,20 +345,65 @@ ipcMain.handle("persona:generate", async (_e, id, { mode, description, model }) 
 });
 ipcMain.handle("persona:merge", (_e, fileText, parsed) => lib("persona").mergePersona(fileText, parsed));
 
-app.whenReady().then(() => {
-  loadRegistry();
-  ensureData(botDir("default"));
+function showWindow() {
+  if (!win || win.isDestroyed()) return createWindow();
+  win.show();
+  win.focus();
+}
+
+function createWindow() {
   win = new BrowserWindow({
     width: 1100,
     height: 760,
     minWidth: 820,
     minHeight: 560,
     title: "Steam LLM Chatbot",
+    icon: path.join(__dirname, "icon.png"),
     autoHideMenuBar: true,
+    show: !process.argv.includes("--hidden"),
     webPreferences: { preload: path.join(__dirname, "preload.js"), contextIsolation: true, nodeIntegration: false, sandbox: true },
   });
   win.loadFile(path.join(__dirname, "renderer", "index.html"));
+  // Closing the window keeps the bots running in the tray (turn off in the header menu).
+  win.on("close", (e) => {
+    if (quitting || !tray || readUi().closeToTray === false) return;
+    e.preventDefault();
+    win.hide();
+  });
+}
+
+function createTray() {
+  try {
+    tray = new Tray(nativeImage.createFromPath(path.join(__dirname, "icon.png")).resize({ width: 22, height: 22 }));
+  } catch { tray = null; return; }
+  const refresh = () => {
+    const running = [...procs.keys()].length;
+    tray.setToolTip(`Steam LLM Chatbot - ${running} bot${running === 1 ? "" : "s"} running`);
+    tray.setContextMenu(Menu.buildFromTemplate([
+      { label: "Open", click: showWindow },
+      { label: `${running} running`, enabled: false },
+      { type: "separator" },
+      { label: "Quit (stops all bots)", click: () => { quitting = true; app.quit(); } },
+    ]));
+  };
+  tray.on("click", showWindow);
+  setInterval(refresh, 3000).unref();
+  refresh();
+}
+
+const gotLock = app.requestSingleInstanceLock();
+if (!gotLock) app.quit();
+else app.on("second-instance", showWindow);
+
+app.whenReady().then(() => {
+  loadRegistry();
+  ensureData(botDir("default"));
+  createWindow();
+  createTray();
+  for (const b of loadRegistry().bots) {
+    if (b.autostart) { const r = startBot(b.id); if (!r.ok) console.warn("autostart", b.id, r.error); }
+  }
 });
 
-app.on("before-quit", () => { for (const p of procs.values()) p.kill(); for (const id of [...chats.keys()]) stopChat(id); });
-app.on("window-all-closed", () => app.quit());
+app.on("before-quit", () => { quitting = true; for (const p of procs.values()) p.kill(); for (const id of [...chats.keys()]) stopChat(id); });
+app.on("window-all-closed", () => { if (quitting || !tray) app.quit(); });

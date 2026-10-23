@@ -17,6 +17,8 @@ contextBridge.exposeInMainWorld("api", {
   openData: invoke("data:open"),
   openLink: invoke("link:open"),
   getUi: invoke("ui:get"),
+  setAutostart: invoke("bots:autostart"),
+  checkUpdate: invoke("update:check"),
   setUi: invoke("ui:set"),
   botStart: invoke("bot:start"),
   botStop: invoke("bot:stop"),

@@ -63,6 +63,7 @@ async function selectBot(id) {
   renderLog();
   renderChat();
   setRunning(isRunning(botId));
+  $("optAutostart").checked = !!bots.find((b) => b.id === botId)?.autostart;
   const active = document.querySelector("#tabs button.active");
   if (active) active.click();
   api.setUi({ lastBot: botId });
@@ -497,6 +498,20 @@ $("wizNext").onclick = async () => {
   renderStep();
 };
 
+/* ---------- background behaviour + updates ---------- */
+$("optAutostart").onchange = () => api.setAutostart(botId, $("optAutostart").checked).then(refreshBots);
+$("optTray").onchange = () => api.setUi({ closeToTray: $("optTray").checked });
+$("optLogin").onchange = () => api.setUi({ launchAtLogin: $("optLogin").checked });
+
+async function checkUpdates() {
+  const res = await api.checkUpdate();
+  if (!res.ok || !res.available || ui.dismissedUpdate === res.latest) return;
+  $("updateText").textContent = `Version ${res.latest} is out (you have ${res.current}).`;
+  $("updateOpen").onclick = () => api.openLink(res.url);
+  $("updateDismiss").onclick = () => { $("updateBanner").hidden = true; api.setUi({ dismissedUpdate: res.latest }); };
+  $("updateBanner").hidden = false;
+}
+
 /* ---------- boot ---------- */
 (async () => {
   ui = await api.getUi();
@@ -504,5 +519,8 @@ $("wizNext").onclick = async () => {
   bots = await api.listBots();
   if (ui.lastBot && bots.some((b) => b.id === ui.lastBot)) botId = ui.lastBot;
   await selectBot(botId);
+  $("optTray").checked = ui.closeToTray !== false;
+  $("optLogin").checked = !!ui.launchAtLogin;
+  checkUpdates();
   if (!ui.wizardSeen && !cfg["Steam account name"]) openWizard();
 })();
