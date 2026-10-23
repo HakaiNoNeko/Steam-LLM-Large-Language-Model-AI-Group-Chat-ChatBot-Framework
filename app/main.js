@@ -156,7 +156,8 @@ ipcMain.handle("prompt:get", (_e, id) => { const dir = botDir(id); ensureData(di
 ipcMain.handle("prompt:set", (_e, id, text) => { fs.writeFileSync(path.join(botDir(id), "system prompt.txt"), String(text)); stopChat(id); });
 ipcMain.handle("data:open", (_e, id) => shell.openPath(botDir(id)));
 ipcMain.handle("link:open", (_e, url) => {
-  if (/^https:\/\/(ollama\.com|nodejs\.org|github\.com\/HakaiNoNeko\/)/.test(url)) shell.openExternal(url);
+  const repo = updateRepo() || lib("update").DEFAULT_REPO;
+  if (/^https:\/\/(ollama\.com|nodejs\.org)\//.test(url) || url.startsWith(`https://github.com/${repo}/releases`)) shell.openExternal(url);
 });
 
 /* ---------- UI preferences (theme, background behaviour) ---------- */
@@ -186,11 +187,69 @@ ipcMain.handle("bots:autostart", (_e, id, on) => {
   if (bot) { bot.autostart = !!on; saveRegistry(reg); }
 });
 
-/* ---------- update check (notify only) ---------- */
+/* ---------- updates: check the project's releases; install only after the user clicks ---------- */
+const updateRepo = () => String(flatConfig(botDir("default"))["Update source"] || "").trim() || undefined;
+
 ipcMain.handle("update:check", async () => {
   try {
-    return { ok: true, current: app.getVersion(), ...(await lib("update").checkForUpdate(app.getVersion())) };
+    const info = await lib("update").checkForUpdate(app.getVersion(), { repo: updateRepo() });
+    return { ok: true, current: app.getVersion(), canInstall: app.isPackaged && !!info.asset, ...info, asset: info.asset ? { name: info.asset.name, size: info.asset.size } : null };
   } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle("update:install", async () => {
+  try {
+    // Look the release up again here: the renderer is never trusted to say what to download.
+    const info = await lib("update").checkForUpdate(app.getVersion(), { repo: updateRepo() });
+    if (!app.isPackaged) return { ok: false, error: "Updating only works in the installed app." };
+    if (!info.available || !info.asset) return { ok: false, error: "No installer for this system in the latest release." };
+    const a = info.asset;
+    if (!a.url.startsWith(`https://github.com/${info.repo}/releases/download/`)) return { ok: false, error: "Unexpected download address." };
+
+    const res = await fetch(a.url, { signal: AbortSignal.timeout(30 * 60 * 1000) });
+    if (!res.ok) throw new Error("Download failed (HTTP " + res.status + ")");
+    const total = Number(res.headers.get("content-length")) || a.size;
+    const crypto = require("crypto");
+    const hash = crypto.createHash("sha256");
+    const tmp = path.join(app.getPath("temp"), "steam-llm-update-" + a.name);
+    const out = fs.createWriteStream(tmp);
+    let got = 0;
+    for await (const chunk of res.body) {
+      hash.update(chunk);
+      got += chunk.length;
+      if (!out.write(chunk)) await new Promise((r) => out.once("drain", r));
+      send("update:progress", { got, total });
+    }
+    await new Promise((r) => out.end(r));
+    if (a.size && got !== a.size) throw new Error("The download was incomplete.");
+    if (a.sha256 && hash.digest("hex") !== a.sha256) { fs.rmSync(tmp, { force: true }); throw new Error("The download did not match its checksum, so it was discarded."); }
+
+    quitting = true;
+    if (process.platform === "win32") {
+      shell.openPath(tmp); // runs the installer, which replaces this app
+      setTimeout(() => app.quit(), 1500);
+      return { ok: true, action: "installer" };
+    }
+    if (process.env.APPIMAGE) {
+      // Put the new AppImage next to the old one (kept for rollback) and start it once this app has quit.
+      const dest = path.join(path.dirname(process.env.APPIMAGE), a.name);
+      fs.copyFileSync(tmp, dest + ".part");
+      fs.chmodSync(dest + ".part", 0o755);
+      fs.renameSync(dest + ".part", dest);
+      fs.rmSync(tmp, { force: true });
+      spawn("sh", ["-c", 'sleep 2; exec "$0"', dest], { detached: true, stdio: "ignore" }).unref();
+      setTimeout(() => app.quit(), 500);
+      return { ok: true, action: "restart", path: dest };
+    }
+    const dest = path.join(app.getPath("downloads"), a.name);
+    fs.copyFileSync(tmp, dest);
+    shell.showItemInFolder(dest);
+    quitting = false;
+    return { ok: true, action: "saved", path: dest };
+  } catch (err) {
+    quitting = false;
     return { ok: false, error: err.message };
   }
 });

@@ -509,8 +509,21 @@ async function checkUpdates() {
   $("updateText").textContent = `Version ${res.latest} is out (you have ${res.current}).`;
   $("updateOpen").onclick = () => api.openLink(res.url);
   $("updateDismiss").onclick = () => { $("updateBanner").hidden = true; api.setUi({ dismissedUpdate: res.latest }); };
+  $("updateInstall").hidden = !res.canInstall;
+  $("updateInstall").onclick = async () => {
+    if (!confirm(`Download ${res.asset.name} and install version ${res.latest}? Running bots will be stopped and the app will restart.`)) return;
+    $("updateInstall").disabled = true;
+    const done = await api.installUpdate();
+    $("updateInstall").disabled = false;
+    $("updateText").textContent = done.ok
+      ? (done.action === "saved" ? `Downloaded to ${done.path}. Install it from there.` : "Installing...")
+      : `Update failed: ${done.error}`;
+  };
   $("updateBanner").hidden = false;
 }
+api.onUpdateProgress(({ got, total }) => {
+  $("updateText").textContent = total ? `Downloading the update... ${Math.round((got / total) * 100)}%` : "Downloading the update...";
+});
 
 /* ---------- boot ---------- */
 (async () => {

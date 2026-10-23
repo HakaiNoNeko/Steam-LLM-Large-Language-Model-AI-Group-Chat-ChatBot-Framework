@@ -89,6 +89,8 @@ Auto join groups = off
 Friend requests = ask
 # Logs a line at startup when a newer release exists on GitHub.
 Check for updates = on
+# Where releases are read from (owner/repo). Blank = the original project. Forks can put their own repo here.
+Update source =
 
 [REPLY MODES]
 # Group modes: off, alias, smart, all
