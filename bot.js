@@ -8,6 +8,7 @@ const path = require("path");
 const { createOllama, parseThinkSetting } = require("./lib/ollama");
 const { bbcodeToPlain, extractImageUrls, isMentioned } = require("./lib/steam-text");
 const { fetchImages } = require("./lib/images");
+const { parseActions, actionsPrompt, rememberPerson, createSteamActions, escapeBb } = require("./lib/steam-actions");
 
 const PROJECT_DIR = process.env.STEAM_BOT_DATA_DIR || __dirname;
 const CONFIG_TXT_FILE = path.join(PROJECT_DIR, "config.txt");
@@ -1056,6 +1057,7 @@ async function askOllama(targetKey, userText, extraInstruction = "", selectedMem
     selectedMemoryBlock || "(no frozen reply context available)",
     "IMPORTANT: Reply only to the latest selected message below. Ignore newer messages that arrived after this reply was queued.",
     extraInstruction ? "Extra guidance: " + extraInstruction : "",
+    actionsPrompt(ACTIONS_ENABLED_V9, { ownedEmoticons: steamActions.ownedList, isGroup: selectedPayload?.kind === "group" }),
     vision.note,
     "Latest selected message: " + userText
   ].filter(Boolean).join("\n\n");
@@ -3637,24 +3639,34 @@ function pumpForcedChatEveryMessageQueueV2(targetKey) {
   scheduleTargetReply(targetKey);
 }
 
+// Logs when Steam rewrote what we sent (that is how /commands show their real wire form).
+function logServerRewriteV9(sent, result) {
+  const modified = safeString(result?.modified_message);
+  if (modified && modified !== sent) logConsole("[steam rewrote message]", { sent, as: modified });
+}
+
 async function sendDm(steamID, targetKey, text) {
   const message = trimReply(text);
-  await client.chat.sendFriendMessage(steamID, message);
+  logServerRewriteV9(message, await client.chat.sendFriendMessage(steamID, message));
   writeChatLog(targetKey, "BOT", message);
   rememberBotReplyXboxStyle(STEAM_ACCOUNT_ID, targetKey, message);
   logConsole("[dm sent]", targetKey, message);
 }
 
-async function sendGroup(groupId, chatId, targetKey, text) {
-  const message = trimReply(text);
+// Group messages are sent without escaping by steam-user, so plain text has its "[" escaped here.
+// Pass {bbcode:true} only for text built by lib/steam-actions (already escaped, may hold mention/spoiler tags);
+// {plain} is the readable version used for logs and memory.
+async function sendGroup(groupId, chatId, targetKey, text, opts = {}) {
+  const message = opts.bbcode ? trimReply(text) : escapeBb(trimReply(text));
+  const plain = opts.plain ?? message;
 
   if (!client.chat || !client.chat.sendChatMessage) {
     throw new Error("client.chat.sendChatMessage is unavailable. Try updating steam-user.");
   }
 
-  await client.chat.sendChatMessage(groupId, chatId, message);
-  writeChatLog(targetKey, "BOT", message);
-  rememberBotReplyXboxStyle(STEAM_ACCOUNT_ID, targetKey, message);
+  logServerRewriteV9(message, await client.chat.sendChatMessage(groupId, chatId, message));
+  writeChatLog(targetKey, "BOT", plain);
+  rememberBotReplyXboxStyle(STEAM_ACCOUNT_ID, targetKey, plain);
 
   logConsole("[group sent]", {
     groupId,
@@ -3828,6 +3840,70 @@ function pumpForcedChatEveryMessageQueueV2(targetKey) {
     forcedChatQueueByTargetV2.delete(key);
   }
 }
+/* STEAM_ACTIONS_V9 (see lib/steam-actions.js) */
+const ACTIONS_ENABLED_V9 = humanConfigBool("Steam actions", true)
+  ? {
+      react: humanConfigBool("Reactions", true),
+      me: humanConfigBool("Me actions", true),
+      mention: humanConfigBool("Mentions", true),
+      spoiler: humanConfigBool("Spoilers", true),
+      store: humanConfigBool("Store links", true)
+    }
+  : { react: false, me: false, mention: false, spoiler: false, store: false };
+const TYPING_INDICATOR_V9 = humanConfigBool("Typing indicator", true);
+const steamActions = createSteamActions(client, (...parts) => logConsole(...parts));
+const rosterByTargetV9 = new Map(); // group targetKey -> Map(lowercase name -> {accountid, name})
+
+function rosterFor(targetKey) {
+  if (!rosterByTargetV9.has(targetKey)) rosterByTargetV9.set(targetKey, new Map());
+  return rosterByTargetV9.get(targetKey);
+}
+
+// Shows "bot is typing" in a DM while the model works (Steam clears it after a few seconds, so repeat).
+function startTypingV9(payload) {
+  if (!TYPING_INDICATOR_V9 || payload?.kind !== "dm" || !payload.steamID || !client.chat?.sendFriendTyping) return () => {};
+  const ping = () => client.chat.sendFriendTyping(payload.steamID).catch(() => {});
+  ping();
+  const timer = setInterval(ping, 4000);
+  const stop = setTimeout(() => clearInterval(timer), 60000);
+  return () => { clearInterval(timer); clearTimeout(stop); };
+}
+
+async function performReplyV9(chosen, targetKey, answer, actionsOut) {
+  const target = chosen.kind === "group"
+    ? { kind: "group", groupId: chosen.groupId, chatId: chosen.chatId }
+    : { kind: "dm", steamID: chosen.steamID };
+
+  for (const action of actionsOut?.actions || []) {
+    if (action.type !== "react") continue;
+    try {
+      await steamActions.react(target, chosen, action.name);
+      logConsole("[action] reacted with :" + action.name + ":", targetKey);
+    } catch (err) {
+      logConsole("[action] reaction failed:", err.message);
+    }
+  }
+
+  if (answer) {
+    if (chosen.kind === "group") {
+      await sendGroup(chosen.groupId, chosen.chatId, targetKey, actionsOut.bbcode(rosterFor(targetKey), true), { bbcode: true, plain: answer });
+    } else {
+      await sendDm(chosen.steamID, targetKey, answer);
+    }
+  }
+
+  for (const action of actionsOut?.actions || []) {
+    if (action.type !== "me") continue;
+    const line = "/me " + trimReply(action.text);
+    try {
+      if (chosen.kind === "group") await sendGroup(chosen.groupId, chosen.chatId, targetKey, line, { bbcode: true, plain: line });
+      else await sendDm(chosen.steamID, targetKey, line);
+    } catch (err) {
+      logConsole("[action] /me failed:", err.message);
+    }
+  }
+}
+
 async function processTargetReply(targetKey) {
   if (replyLocks.has(targetKey)) return;
 
@@ -3855,7 +3931,7 @@ async function processTargetReply(targetKey) {
       return;
     }
 
-    if (groupMode === "alias" && !textCallsBot(payload.text)) {
+    if (groupMode === "alias" && !textCallsBot(payload.text) && !payload.mentioned) {
       logConsole("[group quiet] configured bot name/alias was not used:", targetKey);
       latestByTarget.delete(targetKey);
       return;
@@ -3926,14 +4002,26 @@ async function processTargetReply(targetKey) {
       : "This is a one-to-one Steam DM. Reply naturally and briefly.";
 
     const relationshipInstruction = buildMasterRelationshipBlock(chosen);
-    const answer = await askOllama(
-      targetKey,
-      chosen.text,
-      extra,
-      chosen.selectedMemoryBlock || "",
-      relationshipInstruction,
-      chosen
-    );
+    const stopTyping = startTypingV9(chosen);
+    let rawAnswer;
+    try {
+      rawAnswer = await askOllama(
+        targetKey,
+        chosen.text,
+        extra,
+        chosen.selectedMemoryBlock || "",
+        relationshipInstruction,
+        chosen
+      );
+    } finally {
+      stopTyping();
+    }
+
+    // Pull [react:..] / [me:..] / [mention:..] style tags out of the reply; `answer` is the readable text.
+    const actionsOut = rawAnswer === NO_REPLY_TOKEN
+      ? null
+      : parseActions(rawAnswer, ACTIONS_ENABLED_V9, { ownedEmoticons: steamActions.owned });
+    const answer = actionsOut ? (actionsOut.plain || (actionsOut.actions.length ? "" : NO_REPLY_TOKEN)) : NO_REPLY_TOKEN;
 
     if (answer === NO_REPLY_TOKEN) {
       logConsole("[auto] safety filter silently blocked reply:", {
@@ -3959,11 +4047,7 @@ async function processTargetReply(targetKey) {
       return;
     }
 
-    if (chosen.kind === "group") {
-      await sendGroup(chosen.groupId, chosen.chatId, targetKey, answer);
-    } else {
-      await sendDm(chosen.steamID, targetKey, answer);
-    }
+    await performReplyV9(chosen, targetKey, answer, actionsOut);
 
     noteSmartReplySentV6(chosen);
 
@@ -5627,6 +5711,11 @@ function startFrameworkAfterSteamLoginV8() {
 
   wireGroupChat();
 
+  steamActions.loadEmoticons().catch(() => {});
+  steamActions.onReaction(r => {
+    if (r.isAdd) logConsole("[reaction]", `${r.reactor} reacted :${r.name}: in ${r.kind === "group" ? `group ${r.groupId}/${r.chatId}` : `DM ${r.friend}`}`);
+  });
+
   consoleLoop().catch(err => {
     logConsole("[console fatal]", err.stack || err.message);
   });
@@ -5754,6 +5843,7 @@ function wireGroupChat() {
       }
 
       const targetKey = getGroupTargetKey(groupId, chatId);
+      rememberPerson(rosterFor(targetKey), senderName, sender?.accountid);
 
       const groupName = normalizeText(
         message.chat_group_name ||

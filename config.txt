@@ -56,6 +56,20 @@ Memory AI = on
 # Lets AI semantic analysis update friendship when Friendships is on.
 Friendship AI = on
 
+[STEAM ACTIONS]
+# Lets the model use Steam chat features by writing small tags in its reply, e.g. [react:steamhappy],
+# [me:waves], [mention:Name], [spoiler:text], [store:APPID]. Turn the master switch off to disable all of them.
+Steam actions = on
+Reactions = on
+# "/me" action lines
+Me actions = on
+# @mentions of people in group chats
+Mentions = on
+Spoilers = on
+Store links = on
+# Shows "typing..." in DMs while the model is working.
+Typing indicator = on
+
 [REPLY MODES]
 # Group modes: off, alias, smart, all
 # off   = never automatically reply in a group
