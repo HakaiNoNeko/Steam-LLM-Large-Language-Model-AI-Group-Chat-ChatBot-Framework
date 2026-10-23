@@ -1,0 +1,9 @@
+node_modules/
+dist/
+logs/
+memory.json
+persistent-memory.json
+joinchat-invites.json
+steam-memory-db-v4.json
+steam-memory-db-v4.json.*
+*.bak*
