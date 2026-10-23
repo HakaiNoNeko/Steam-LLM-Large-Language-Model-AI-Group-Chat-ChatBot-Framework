@@ -5780,7 +5780,7 @@ function startFrameworkAfterSteamLoginV8() {
 
   scanPendingFriendRequestsV9();
   if (humanConfigBool("Check for updates", true)) {
-    checkForUpdate(BOT_VERSION_V9).then(u => { if (u.available) logConsole(`[update] version ${u.latest} is available: ${u.url}`); }).catch(() => {});
+    checkForUpdate(BOT_VERSION_V9, { repo: String(humanConfig("Update source", "")).trim() || undefined }).then(u => { if (u.available) logConsole(`[update] version ${u.latest} is available: ${u.url}`); }).catch(() => {});
   }
   steamActions.loadEmoticons().catch(() => {});
   steamActions.onReaction(r => {

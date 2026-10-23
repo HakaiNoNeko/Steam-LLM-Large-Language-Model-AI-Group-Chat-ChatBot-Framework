@@ -19,6 +19,8 @@ contextBridge.exposeInMainWorld("api", {
   getUi: invoke("ui:get"),
   setAutostart: invoke("bots:autostart"),
   checkUpdate: invoke("update:check"),
+  installUpdate: invoke("update:install"),
+  onUpdateProgress: subscribe("update:progress"),
   setUi: invoke("ui:set"),
   botStart: invoke("bot:start"),
   botStop: invoke("bot:stop"),
