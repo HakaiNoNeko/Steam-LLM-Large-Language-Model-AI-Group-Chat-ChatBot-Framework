@@ -31,6 +31,19 @@ Fast reply model = llama3.2:latest
 Fast timing model = llama3.2:latest
 Memory model = llama3.2:latest
 Safety model = llama-guard3:1b
+# Thinking applies to the reply model only, and only if that model supports it.
+# off = fastest (recommended for chat), on = let it think first, low/medium/high = effort (gpt-oss style models).
+Thinking = off
+# Vision lets the bot look at images people send. If the reply model can see images it is used directly.
+Vision = on
+# Otherwise this model (e.g. llama3.2-vision) describes the image first. Leave blank for none.
+Vision model =
+Max images per message = 3
+# Images are only downloaded from known Steam/Giphy/Imgur/Discord hosts unless this is on.
+Allow any image host = off
+# Give up on a stuck model after this many seconds.
+Reply timeout seconds = 180
+Utility timeout seconds = 60
 
 [FEATURES]
 # Memory stores useful conversation facts and recent interactions.
@@ -69,7 +82,11 @@ Max reply sentences = 3
 [PERFORMANCE]
 Fast mode = off
 Performance mode = on
+# If Steam stays unreachable this long the bot exits so it can be restarted (0 = never).
+Reconnect watchdog minutes = 10
+# Chat and console logs older than this are deleted at startup.
+Log retention days = 30
 
 [CHAT COMMANDS]
-# Prefix used for simple Steam-side commands such as !help and !ask.
+# Prefix for simple Steam-side commands. "!" gives !help and !ask. A word such as "!bot" gives "!bot help" and "!bot ask".
 Chat command prefix = !bot

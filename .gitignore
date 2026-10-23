@@ -7,3 +7,5 @@ joinchat-invites.json
 steam-memory-db-v4.json
 steam-memory-db-v4.json.*
 *.bak*
+steam-data/
+steam-refresh-token.json

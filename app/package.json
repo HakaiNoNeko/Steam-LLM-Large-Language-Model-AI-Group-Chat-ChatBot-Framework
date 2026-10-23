@@ -31,6 +31,10 @@
         "to": "bot/bot.js"
       },
       {
+        "from": "../lib",
+        "to": "bot/lib"
+      },
+      {
         "from": "../config.txt",
         "to": "bot/config.txt"
       },
