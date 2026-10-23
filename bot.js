@@ -993,6 +993,17 @@ async function askOllamaCleanWarning(
 */
 async function prepareVisionV9(payload) {
   const empty = { images: [], note: "" };
+  // In Steam an image is a separate message from the text, sent just before or just after it. If this message has
+  // none, borrow the same person's image from the last 2 minutes (waiting a moment if they seem to be asking about one).
+  if (payload && !payload.imageUrls?.length && !payload.imageData?.length && payload.senderKey) {
+    const find = () => (recentImagesV9.get(payload.targetKey) || []).filter(i => i.sender === payload.senderKey && Date.now() - i.at < 120000).flatMap(i => i.urls);
+    let found = find();
+    for (let i = 0; !found.length && i < 6 && /\b(picture|image|pic|photo|screenshot|this|that|see|look|show)\b/i.test(payload.text || ""); i++) {
+      await new Promise(resolve => setTimeout(resolve, 500));
+      found = find();
+    }
+    if (found.length) payload.imageUrls = found.slice(-VISION_MAX_IMAGES);
+  }
   const urls = payload?.imageUrls || [];
   const direct = payload?.imageData || []; // already-downloaded base64 images (test chat)
   if (!VISION_ENABLED || !(urls.length || direct.length)) return empty;
@@ -1071,7 +1082,7 @@ async function askOllama(targetKey, userText, extraInstruction = "", selectedMem
     selectedMemoryBlock || "(no frozen reply context available)",
     "IMPORTANT: Reply only to the latest selected message below. Ignore newer messages that arrived after this reply was queued.",
     extraInstruction ? "Extra guidance: " + extraInstruction : "",
-    actionsPrompt(ACTIONS_ENABLED_V9, { ownedEmoticons: steamActions.ownedList, isGroup: selectedPayload?.kind === "group" }),
+    actionsPrompt(ACTIONS_ENABLED_V9, { ownedEmoticons: EMOTICONS_V9 ? steamActions.ownedList : [], isGroup: selectedPayload?.kind === "group" }),
     vision.note,
     selectedPayload?.senderName ? `The person speaking to you right now is "${selectedPayload.senderName}". Do not confuse them with anyone else you know.` : "",
     "Latest selected message: " + userText
@@ -3871,9 +3882,11 @@ const ACTIONS_ENABLED_V9 = humanConfigBool("Steam actions", true)
       store: humanConfigBool("Store links", true)
     }
   : { react: false, me: false, mention: false, spoiler: false, store: false };
+const EMOTICONS_V9 = humanConfigBool("Steam actions", true) && humanConfigBool("Emoticons", true);
 const TYPING_INDICATOR_V9 = humanConfigBool("Typing indicator", true);
 const steamActions = createSteamActions(client, (...parts) => logConsole(...parts));
 const rosterByTargetV9 = new Map(); // group targetKey -> Map(lowercase name -> {accountid, name})
+const recentImagesV9 = new Map(); // targetKey -> [{sender, urls, at}]: Steam sends a pasted image as its own message
 const lastIncomingV9 = new Map(); // targetKey -> last payload received (for the /react test command)
 
 function rosterFor(targetKey) {
@@ -4040,7 +4053,7 @@ async function processTargetReply(targetKey) {
     // Pull [react:..] / [me:..] / [mention:..] style tags out of the reply; `answer` is the readable text.
     const actionsOut = rawAnswer === NO_REPLY_TOKEN
       ? null
-      : parseActions(rawAnswer, ACTIONS_ENABLED_V9, { ownedEmoticons: steamActions.owned });
+      : parseActions(rawAnswer, ACTIONS_ENABLED_V9, { ownedEmoticons: steamActions.owned, emoticons: EMOTICONS_V9 });
     const answer = actionsOut ? (actionsOut.plain || (actionsOut.actions.length ? "" : NO_REPLY_TOKEN)) : NO_REPLY_TOKEN;
 
     if (answer === NO_REPLY_TOKEN) {
@@ -5555,6 +5568,14 @@ function receiveIncoming(payload) {
   */
   writeChatLog(targetKey, `USER ${senderKey || "unknown"}`, text);
   lastIncomingV9.set(targetKey, payload);
+  if (payload.rawText && /\[img\b/i.test(payload.rawText)) {
+    logConsole("[vision] image message:", { urls: payload.imageUrls, raw: payload.rawText.slice(0, 300) });
+  }
+  if (payload.imageUrls?.length) {
+    const list = recentImagesV9.get(targetKey) || [];
+    list.push({ sender: payload.senderKey, urls: payload.imageUrls, at: Date.now() });
+    recentImagesV9.set(targetKey, list.filter(i => Date.now() - i.at < 300000).slice(-5));
+  }
 
   // Ephemeral room awareness for Smart Reply. This does not enter reply memory.
   recordSmartReplyRoomMessageV6(payload);
@@ -6977,7 +6998,7 @@ async function playgroundTurnV9(req) {
 
   const roster = new Map();
   rememberPerson(roster, sender, 1);
-  const parsed = parseActions(rawAnswer, ACTIONS_ENABLED_V9, { ownedEmoticons: steamActions.owned });
+  const parsed = parseActions(rawAnswer, ACTIONS_ENABLED_V9, { ownedEmoticons: steamActions.owned, emoticons: EMOTICONS_V9 });
   turns.push({ name: BOT_NAME, text: parsed.plain });
   return {
     reply: parsed.plain,

@@ -122,3 +122,8 @@ test("only one model stays loaded, keep_alive is always sent, unloadAll frees ev
   server.closeAllConnections();
   server.close();
 });
+
+test("extractImageUrls handles [img]url[/img] and urls inside tag attributes", () => {
+  assert.deepEqual(extractImageUrls("[img]https://images.steamusercontent.com/ugc/1/2/[/img]"), ["https://images.steamusercontent.com/ugc/1/2/"]);
+  assert.ok(extractImageUrls('[img src="x" url="https://images.steamusercontent.com/ugc/9/"][/img]').includes("https://images.steamusercontent.com/ugc/9/"));
+});

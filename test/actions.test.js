@@ -54,3 +54,15 @@ test("actionsPrompt lists enabled actions and owned emoticons", () => {
   assert.doesNotMatch(p, /\[mention:/);
   assert.equal(actionsPrompt(OFF, {}), "");
 });
+
+test("garbled emoticons are repaired or removed; bare [name] becomes a reaction; Emoticons off strips them", () => {
+  const owned = new Set(["steamhappy", "steammocking"]);
+  assert.equal(parseActions("hi :steamhappy! ok", ALL_ON, { ownedEmoticons: owned }).plain, "hi :steamhappy:! ok");
+  assert.equal(parseActions("hm :steamocking nya", ALL_ON, { ownedEmoticons: owned }).plain, "hm :steammocking: nya");
+  assert.equal(parseActions("hm :steamnonsense: nya", ALL_ON, { ownedEmoticons: owned }).plain, "hm nya");
+  assert.equal(parseActions("it is 5:30 at http://x.com", ALL_ON, { ownedEmoticons: owned }).plain, "it is 5:30 at http://x.com");
+  const r = parseActions("[steamhappy] sounds fun", ALL_ON, { ownedEmoticons: owned });
+  assert.deepEqual(r.actions, [{ type: "react", name: "steamhappy" }]);
+  assert.equal(r.plain, "sounds fun");
+  assert.equal(parseActions("yay :steamhappy: ok", ALL_ON, { ownedEmoticons: owned, emoticons: false }).plain, "yay ok");
+});
