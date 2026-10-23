@@ -76,6 +76,9 @@ Me actions = on
 Mentions = on
 Spoilers = on
 Store links = on
+# Lets the bot write :emoticons: in its text (at most one per message). Small models overuse them, so this is off by default.
+# Off removes every emoticon from its messages. Reactions are the separate switch above.
+Emoticons = off
 # Shows "typing..." in DMs while the model is working.
 Typing indicator = on
 
